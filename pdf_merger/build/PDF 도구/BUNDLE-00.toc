@@ -1,0 +1,3 @@
+([('PDF 도구',
+   '/Users/seolhee/Documents/00_project/pdf_merger/dist/PDF 도구',
+   'EXECUTABLE')],)
