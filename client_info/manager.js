@@ -25,6 +25,7 @@ let currentEditField = null;
 let currentInsuranceCompany = null;
 let currentEditingClient = null;
 let isEditingClient = false;
+let isInitialPasswordUser = false; // 초기 비밀번호 사용자 여부
 
 // 보험사 목록 정의
 const lifeInsuranceCompanies = [
@@ -72,8 +73,6 @@ window.login = async function() {
   const errorDiv = document.getElementById('login-error');
   const loginBtn = document.getElementById('login-btn');
 
-  console.log('로그인 시도:', { code, password: password ? '****' : '없음' });
-
   if (!code || !password) {
     showError(errorDiv, '담당자 코드와 비밀번호를 입력해주세요.');
     return;
@@ -85,7 +84,6 @@ window.login = async function() {
     errorDiv.style.display = 'none';
 
     // Firebase Functions 호출
-    console.log('Firebase Functions 호출 중...', { code });
     const authenticateManager = httpsCallable(functions, 'authenticateManager');
     const result = await authenticateManager({ code, password });
 
@@ -94,6 +92,7 @@ window.login = async function() {
       
       // 초기 비밀번호(0000) 사용 시 강제 변경 요구
       if (password === '0000') {
+        isInitialPasswordUser = true;
         alert('🔐 초기 비밀번호를 사용하고 있습니다.\n보안을 위해 비밀번호를 변경해주세요.');
         
         // 비밀번호 변경 모달 즉시 표시
@@ -103,15 +102,15 @@ window.login = async function() {
         document.getElementById('login-form').style.display = 'none';
         document.getElementById('main-container').style.display = 'flex';
       } else {
+        isInitialPasswordUser = false;
         // 일반 로그인 성공 - 메인 페이지 표시
         document.getElementById('login-form').style.display = 'none';
         document.getElementById('main-container').style.display = 'flex';
       }
       
-      // 모바일에서만 햄버거 버튼 표시
+      // 모바일에서만 햄버거 버튼 표시 (로그인 성공 후)
       const mobileMenuToggle = document.getElementById('mobile-menu-toggle');
       if (mobileMenuToggle) {
-        // 화면 크기에 따라 햄버거 버튼 표시/숨김
         if (window.innerWidth <= 768) {
           mobileMenuToggle.style.display = 'flex';
         } else {
@@ -151,8 +150,8 @@ window.login = async function() {
 };
 
 // 로그아웃 함수
-window.logout = function() {
-  if (confirm('로그아웃 하시겠습니까?')) {
+window.logout = function(skipConfirm = false) {
+  if (skipConfirm || confirm('다시 로그인해야 합니다.')) {
     currentManager = null;
     currentClients = [];
     
@@ -170,10 +169,10 @@ window.logout = function() {
     
     document.getElementById('main-container').style.display = 'none';
     
-    // 모바일 햄버거 버튼 숨기기
+    // 모바일 햄버거 버튼 숨기기 (로그인 화면에서는 보이지 않아야 함)
     const mobileMenuToggle = document.getElementById('mobile-menu-toggle');
     if (mobileMenuToggle) {
-      mobileMenuToggle.style.display = 'none';
+      mobileMenuToggle.style.display = 'none !important';
       closeMobileMenu(); // 메뉴가 열려있다면 닫기
     }
     
@@ -209,6 +208,24 @@ async function loadManagerProfile() {
   document.getElementById('profile-role').textContent = currentManager.role || '';
   document.getElementById('profile-phone').textContent = currentManager.phone || '';
   document.getElementById('profile-email').textContent = currentManager.email || '';
+  
+  // 가이아 계정 정보 표시
+  document.getElementById('profile-gaia-id').textContent = currentManager.gaiaId || '-';
+  
+  // 가이아 비밀번호 복호화해서 표시
+  const gaiaPasswordElement = document.getElementById('profile-gaia-password');
+  if (currentManager.gaiaPassword) {
+    gaiaPasswordElement.textContent = '로딩 중...';
+    try {
+      const decryptedPassword = await decryptSSN(currentManager.gaiaPassword);
+      gaiaPasswordElement.textContent = decryptedPassword || '-';
+    } catch (error) {
+      console.error('가이아 비밀번호 복호화 실패:', error);
+      gaiaPasswordElement.textContent = '-';
+    }
+  } else {
+    gaiaPasswordElement.textContent = '-';
+  }
 }
 
 // 담당자별 고객 목록 로드
@@ -308,6 +325,7 @@ async function decryptSSN(encryptedSSN) {
     return encryptedSSN;
   }
 }
+
 
 // 파일 크기 포맷팅 함수
 function formatBytes(bytes) {
@@ -550,6 +568,9 @@ window.showClientDetail = async function(clientId) {
   `;
 
   modal.style.display = 'block';
+  
+  // 백그라운드 스크롤 방지
+  document.body.style.overflow = 'hidden';
 };
 
 // 보험사 계정 정보 로드
@@ -564,60 +585,97 @@ async function loadInsuranceAccounts() {
   renderInsuranceList(nonLifeInsuranceCompanies, 'nonlife-insurance-list');
 }
 
+// 검색어 전역 변수
+let currentInsuranceSearchTerm = '';
+
 // 보험사 목록 렌더링 (카드 형식)
 function renderInsuranceList(companies, containerId) {
   const container = document.getElementById(containerId);
   if (!container) return;
 
+  // 검색어로 필터링
+  const filteredCompanies = companies.filter(company => 
+    company.name.toLowerCase().includes(currentInsuranceSearchTerm.toLowerCase())
+  );
+
   let registeredCount = 0;
+  let filteredRegisteredCount = 0;
   
-  const cardsHtml = companies.map(company => {
+  const cardsHtml = filteredCompanies.map(company => {
     const account = currentManager?.insuranceAccounts?.[company.key];
-    const hasAccount = account && (account.employeeId || account.password);
+    const hasEmployeeId = account && account.employeeId;
+    const hasPassword = account && account.password;
     
-    if (hasAccount) registeredCount++;
+    // 상태 판단: 둘 다 있으면 complete, 하나만 있으면 partial, 둘 다 없으면 none
+    let statusClass, statusText, statusBadge;
+    if (hasEmployeeId && hasPassword) {
+      statusClass = 'status-complete';
+      statusText = '계정 등록됨';
+      statusBadge = 'complete';
+      filteredRegisteredCount++;
+    } else if (hasEmployeeId || hasPassword) {
+      statusClass = 'status-partial';
+      statusText = '비밀번호 미등록';
+      statusBadge = 'partial';
+      filteredRegisteredCount++;
+    } else {
+      statusClass = 'status-none';
+      statusText = '계정 미등록';
+      statusBadge = 'none';
+    }
     
     return `
-      <div class="insurance-card ${hasAccount ? 'registered' : 'not-registered'}" 
+      <div class="insurance-card ${statusClass}" 
            onclick="editInsuranceAccount('${company.key}', '${company.name}')">
         <div class="insurance-card-header">
-          <h5>
-            <i class="fas fa-building"></i>
-            ${company.name}
-          </h5>
+          <h5>${company.name}</h5>
+          <span class="status-badge ${statusBadge}">${statusText}</span>
         </div>
         <div class="insurance-card-body">
-          <div class="insurance-status">
-            <div class="status-indicator ${hasAccount ? 'registered' : 'not-registered'}"></div>
-            <span class="status-text ${hasAccount ? 'registered' : 'not-registered'}">
-              ${hasAccount ? '계정 등록됨' : '계정 미등록'}
-            </span>
+          <div class="account-info">
+            <div class="account-detail">
+              <span class="account-label">사원번호:</span>
+              <span class="account-value">${hasEmployeeId ? account.employeeId : '-'}</span>
+            </div>
+            <div class="account-detail">
+              <span class="account-label">비밀번호:</span>
+              <span class="account-value" id="password-${company.key}">${hasPassword ? '로딩 중...' : '미설정'}</span>
+            </div>
           </div>
-          ${hasAccount ? `
-            <div class="account-info">
-              <div class="account-detail">
-                <span class="account-label">사원번호:</span>
-                <span class="account-value">${account.employeeId || '-'}</span>
-              </div>
-              <div class="account-detail">
-                <span class="account-label">비밀번호:</span>
-                <span class="account-value">${account.password ? '설정됨' : '미설정'}</span>
-              </div>
-            </div>
-          ` : `
-            <div class="account-info">
-              <div class="account-detail">
-                <span class="account-label">상태:</span>
-                <span class="account-value" style="color: #dc3545;">계정 정보 없음</span>
-              </div>
-            </div>
-          `}
         </div>
       </div>
     `;
   }).join('');
 
   container.innerHTML = cardsHtml;
+  
+  // 비밀번호 복호화 (비동기)
+  filteredCompanies.forEach(async (company) => {
+    const account = currentManager?.insuranceAccounts?.[company.key];
+    if (account && account.password) {
+      try {
+        const decryptedPassword = await decryptSSN(account.password);
+        const passwordElement = document.getElementById(`password-${company.key}`);
+        if (passwordElement) {
+          passwordElement.textContent = decryptedPassword || '복호화 실패';
+        }
+      } catch (error) {
+        console.error(`보험사 ${company.key} 비밀번호 복호화 실패:`, error);
+        const passwordElement = document.getElementById(`password-${company.key}`);
+        if (passwordElement) {
+          passwordElement.textContent = '복호화 실패';
+        }
+      }
+    }
+  });
+  
+  // 전체 등록 카운트 계산 (검색 필터와 관계없이)
+  companies.forEach(company => {
+    const account = currentManager?.insuranceAccounts?.[company.key];
+    if (account && (account.employeeId || account.password)) {
+      registeredCount++;
+    }
+  });
   
   // 카운트 업데이트
   const isLifeInsurance = containerId === 'life-insurance-list';
@@ -643,7 +701,9 @@ window.editField = function(fieldName) {
     team: '팀명',
     role: '직책',
     phone: '연락처',
-    email: '이메일'
+    email: '이메일',
+    gaiaId: '가이아 아이디',
+    gaiaPassword: '가이아 비밀번호'
   };
 
   title.textContent = `${fieldLabels[fieldName]} 수정`;
@@ -654,6 +714,8 @@ window.editField = function(fieldName) {
   select.style.display = 'none';
   phoneGroup.style.display = 'none';
   emailGroup.style.display = 'none';
+  const teamGroup = document.getElementById('team-input-group');
+  if (teamGroup) teamGroup.style.display = 'none';
 
   if (fieldName === 'role') {
     // 직책 선택박스
@@ -763,6 +825,33 @@ window.editField = function(fieldName) {
     
     emailGroup.style.display = 'block';
     emailId.focus();
+  } else if (fieldName === 'gaiaPassword') {
+    // 가이아 비밀번호 - 복호화해서 표시
+    if (currentManager.gaiaPassword) {
+      input.value = '로딩 중...';
+      decryptSSN(currentManager.gaiaPassword).then(decryptedPassword => {
+        input.value = decryptedPassword || '';
+      }).catch(error => {
+        console.error('가이아 비밀번호 복호화 실패:', error);
+        input.value = '';
+      });
+    } else {
+      input.value = '';
+    }
+    input.style.display = 'block';
+    input.focus();
+  } else if (fieldName === 'team') {
+    // 팀명 - 전용 입력 그룹 사용
+    const teamValue = currentManager[fieldName] || '';
+    const displayValue = teamValue.endsWith('팀') ? teamValue.slice(0, -1) : teamValue;
+    const teamInput = document.getElementById('edit-modal-team-input');
+    const teamGroup = document.getElementById('team-input-group');
+    
+    if (teamInput && teamGroup) {
+      teamInput.value = displayValue;
+      teamGroup.style.display = 'flex';
+      teamInput.focus();
+    }
   } else {
     // 일반 텍스트 입력
     input.value = currentManager[fieldName] || '';
@@ -771,6 +860,9 @@ window.editField = function(fieldName) {
   }
 
   modal.style.display = 'block';
+  
+  // 백그라운드 스크롤 방지
+  document.body.style.overflow = 'hidden';
 };
 
 // 필드 수정 저장
@@ -854,16 +946,35 @@ window.saveEdit = async function() {
     } else {
       newValue = '';
     }
+  } else if (currentEditField === 'team') {
+    // 팀명 - 전용 입력에서 값 가져오기
+    const teamInput = document.getElementById('edit-modal-team-input');
+    newValue = teamInput ? teamInput.value.trim() : '';
+    
+    // 팀명 처리 (숫자만 입력받아서 '팀' 자동 추가)
+    if (newValue && !newValue.endsWith('팀')) {
+      newValue = newValue + '팀';
+    }
   } else {
     newValue = input.value.trim();
   }
 
   try {
-    // Firestore 업데이트
-    const managerRef = doc(db, 'managers', currentManager.id);
-    await updateDoc(managerRef, {
-      [currentEditField]: newValue
-    });
+    // 가이아 비밀번호는 암호화해서 저장
+    if (currentEditField === 'gaiaPassword') {
+      // Firebase Functions를 통해 암호화된 값으로 업데이트
+      const updateManagerInfo = httpsCallable(functions, 'updateManagerInfo');
+      await updateManagerInfo({
+        managerId: currentManager.id,
+        gaiaPassword: newValue
+      });
+    } else {
+      // Firestore 업데이트
+      const managerRef = doc(db, 'managers', currentManager.id);
+      await updateDoc(managerRef, {
+        [currentEditField]: newValue
+      });
+    }
 
     // 로컬 데이터 업데이트
     currentManager[currentEditField] = newValue;
@@ -883,22 +994,57 @@ window.saveEdit = async function() {
 // 비밀번호 변경 모달 열기
 window.changePassword = function() {
   const modal = document.getElementById('passwordModal');
+  
+  // 입력 필드 초기화
+  document.getElementById('current-password').value = '';
+  document.getElementById('new-password').value = '';
+  document.getElementById('confirm-password').value = '';
+  
+  // 버튼 상태 초기화
+  const saveBtn = document.getElementById('save-password-btn');
+  if (saveBtn) {
+    saveBtn.textContent = '변경';
+    saveBtn.disabled = false;
+  }
+  
   modal.style.display = 'block';
   
-  // 초기 비밀번호 사용자인 경우 모달 닫기 방지
-  if (currentManager && document.getElementById('manager-password').value === '0000') {
+  // 백그라운드 스크롤 방지
+  document.body.style.overflow = 'hidden';
+  
+  // 버튼들을 기본 상태로 복원
+  const closeBtn = modal.querySelector('.close');
+  const cancelBtn = modal.querySelector('.secondary-btn');
+  const modalTitle = modal.querySelector('h4');
+  
+  if (isInitialPasswordUser) {
     // X 버튼과 취소 버튼 숨기기
-    const closeBtn = modal.querySelector('.close');
-    const cancelBtn = modal.querySelector('.secondary-btn');
     if (closeBtn) closeBtn.style.display = 'none';
     if (cancelBtn) cancelBtn.style.display = 'none';
     
     // 모달 헤더에 필수 변경 안내 추가
-    const modalTitle = modal.querySelector('h4');
     if (modalTitle) {
-      modalTitle.innerHTML = '비밀번호 변경 (필수) 🔐';
-      modalTitle.style.color = '#dc3545';
+      modalTitle.innerHTML = '<i class="fas fa-key"></i> 비밀번호 변경 (필수)';
+      modalTitle.style.color = 'white';
     }
+  } else {
+    // 일반 모드 - 버튼들 표시
+    if (closeBtn) closeBtn.style.display = 'block';
+    if (cancelBtn) cancelBtn.style.display = 'block';
+    
+    // 기본 제목으로 복원
+    if (modalTitle) {
+      modalTitle.innerHTML = '<i class="fas fa-key"></i> 비밀번호 변경';
+      modalTitle.style.color = 'white';
+    }
+  }
+};
+
+// 비밀번호 모달 엔터키 핸들러
+window.handlePasswordModalEnter = function(event) {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    savePassword();
   }
 };
 
@@ -923,6 +1069,12 @@ window.savePassword = async function() {
     return;
   }
 
+  // 버튼 비활성화 및 상태 변경
+  const saveBtn = document.getElementById('save-password-btn');
+  const originalText = saveBtn.innerHTML;
+  saveBtn.disabled = true;
+  saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 변경 중...';
+
   try {
     const changeManagerPassword = httpsCallable(functions, 'changeManagerPassword');
     await changeManagerPassword({
@@ -934,16 +1086,29 @@ window.savePassword = async function() {
     // 초기 비밀번호 사용자였다면 특별 메시지
     const wasInitialPassword = document.getElementById('manager-password').value === '0000';
     
-    closePasswordModal();
+    // 모달 강제 닫기 (초기 비밀번호 사용자도 포함)
+    const modal = document.getElementById('passwordModal');
+    modal.style.display = 'none';
+    
+    // 필드 초기화
+    document.getElementById('current-password').value = '';
+    document.getElementById('new-password').value = '';
+    document.getElementById('confirm-password').value = '';
+    
+    // 백그라운드 스크롤 복원
+    document.body.style.overflow = '';
+    
+    // 초기 비밀번호 사용자 상태 해제
+    isInitialPasswordUser = false;
     
     if (wasInitialPassword) {
-      alert('✅ 비밀번호가 성공적으로 변경되었습니다!\n이제 안전하게 서비스를 이용하실 수 있습니다.');
-      
-      // 비밀번호 입력란 초기화
-      document.getElementById('manager-password').value = '';
+      alert('✅ 비밀번호가 성공적으로 변경되었습니다!\n보안을 위해 새로운 비밀번호로 다시 로그인해주세요.');
     } else {
-      alert('비밀번호가 변경되었습니다.');
+      alert('✅ 비밀번호가 변경되었습니다.\n보안을 위해 새로운 비밀번호로 다시 로그인해주세요.');
     }
+    
+    // 로그아웃 처리 (확인 창 건너뛰기)
+    logout(true);
   } catch (error) {
     console.error('비밀번호 변경 실패:', error);
     let errorMessage = '비밀번호 변경에 실패했습니다.';
@@ -953,6 +1118,13 @@ window.savePassword = async function() {
     }
     
     alert(errorMessage);
+    
+    // 버튼 상태 복원
+    const saveBtn = document.getElementById('save-password-btn');
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.innerHTML = '변경';
+    }
   }
 };
 
@@ -970,9 +1142,24 @@ window.editInsuranceAccount = function(companyKey, companyName) {
 
   const account = currentManager?.insuranceAccounts?.[companyKey];
   employeeIdInput.value = account?.employeeId || '';
-  passwordInput.value = ''; // 보안상 기존 비밀번호는 표시하지 않음
+  
+  // 기존 비밀번호 복호화해서 표시
+  if (account?.password) {
+    passwordInput.value = '로딩 중...';
+    decryptSSN(account.password).then(decryptedPassword => {
+      passwordInput.value = decryptedPassword || '';
+    }).catch(error => {
+      console.error('비밀번호 복호화 실패:', error);
+      passwordInput.value = '';
+    });
+  } else {
+    passwordInput.value = '';
+  }
 
   modal.style.display = 'block';
+  
+  // 백그라운드 스크롤 방지
+  document.body.style.overflow = 'hidden';
 };
 
 // 보험사 계정 저장
@@ -1016,6 +1203,9 @@ window.saveInsuranceAccount = async function() {
 window.closeEditModal = function() {
   document.getElementById('editModal').style.display = 'none';
   currentEditField = null;
+  
+  // 백그라운드 스크롤 복원
+  document.body.style.overflow = '';
 };
 
 window.closePasswordModal = function() {
@@ -1045,6 +1235,9 @@ window.closePasswordModal = function() {
     modalTitle.innerHTML = '비밀번호 변경';
     modalTitle.style.color = '';
   }
+  
+  // 백그라운드 스크롤 복원
+  document.body.style.overflow = '';
 };
 
 window.closeClientModal = function() {
@@ -1052,6 +1245,9 @@ window.closeClientModal = function() {
   // 수정 모드 상태 초기화
   isEditingClient = false;
   currentEditingClient = null;
+  
+  // 백그라운드 스크롤 복원
+  document.body.style.overflow = '';
 };
 
 // 섹션별 수정 모드
@@ -1269,6 +1465,9 @@ async function saveSectionChanges(sectionName) {
 window.closeInsuranceModal = function() {
   document.getElementById('insuranceModal').style.display = 'none';
   currentInsuranceCompany = null;
+  
+  // 백그라운드 스크롤 복원
+  document.body.style.overflow = '';
 };
 
 // DOM 로드 후 초기화
@@ -1325,6 +1524,26 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
+  // 보험사 검색
+  const insuranceSearch = document.getElementById('insurance-search');
+  if (insuranceSearch) {
+    insuranceSearch.addEventListener('input', function(e) {
+      currentInsuranceSearchTerm = e.target.value.trim();
+      renderInsuranceList(lifeInsuranceCompanies, 'life-insurance-list');
+      renderInsuranceList(nonLifeInsuranceCompanies, 'nonlife-insurance-list');
+    });
+  }
+
+  const insuranceSearchReset = document.getElementById('insurance-search-reset');
+  if (insuranceSearchReset) {
+    insuranceSearchReset.addEventListener('click', function() {
+      insuranceSearch.value = '';
+      currentInsuranceSearchTerm = '';
+      renderInsuranceList(lifeInsuranceCompanies, 'life-insurance-list');
+      renderInsuranceList(nonLifeInsuranceCompanies, 'nonlife-insurance-list');
+    });
+  }
+
   // 모달 외부 클릭 시 닫기
   window.addEventListener('click', function(e) {
     const modals = ['editModal', 'passwordModal', 'clientModal', 'insuranceModal'];
@@ -1345,10 +1564,12 @@ document.addEventListener('DOMContentLoaded', function() {
     if (e.key === 'Escape') {
       // 열려있는 모달 찾기
       const modals = ['editModal', 'passwordModal', 'clientModal', 'insuranceModal'];
+      let modalClosed = false;
       modals.forEach(modalId => {
         const modal = document.getElementById(modalId);
         if (modal && modal.style.display === 'block') {
           modal.style.display = 'none';
+          modalClosed = true;
           // 각 모달별 닫기 함수 호출
           if (modalId === 'editModal') closeEditModal();
           else if (modalId === 'passwordModal') closePasswordModal();
@@ -1356,6 +1577,11 @@ document.addEventListener('DOMContentLoaded', function() {
           else if (modalId === 'insuranceModal') closeInsuranceModal();
         }
       });
+      
+      // 모달이 닫혔으면 스크롤 복원
+      if (modalClosed) {
+        document.body.style.overflow = '';
+      }
     }
   });
 
@@ -1517,11 +1743,13 @@ window.resetPassword = async function() {
     const managerDoc = managersSnapshot.docs[0];
     const managerId = managerDoc.id;
     
-    // Firebase Functions 호출 (담당자 본인이 초기화)
-    const setManagerPassword = httpsCallable(functions, 'setManagerPassword');
-    await setManagerPassword({
-      managerId: managerId,
-      password: '0000'
+    // 비밀번호 해싱 (SHA256)
+    const hashedPassword = CryptoJS.SHA256('0000').toString();
+    
+    // Firestore에서 직접 비밀번호 업데이트
+    await updateDoc(doc(db, 'managers', managerId), {
+      password: hashedPassword,
+      passwordUpdatedAt: new Date()
     });
     
     alert('✅ 비밀번호가 초기화되었습니다.\n\n새 비밀번호: 0000\n\n이 비밀번호로 로그인 후 새로운 비밀번호로 변경해주세요.');
@@ -1533,12 +1761,12 @@ window.resetPassword = async function() {
     console.error('비밀번호 초기화 실패:', error);
     let errorMessage = '비밀번호 초기화에 실패했습니다.';
     
-    if (error.code === 'functions/permission-denied') {
-      errorMessage = '비밀번호 초기화 권한이 없습니다.';
-    } else if (error.code === 'functions/not-found') {
+    if (error.code === 'permission-denied') {
+      errorMessage = '데이터베이스 접근 권한이 없습니다.';
+    } else if (error.code === 'not-found') {
       errorMessage = '존재하지 않는 담당자입니다.';
     }
     
-    alert(`❌ ${errorMessage}\n\n${error.message || error}`);
+    alert(`❌ ${errorMessage}\n\n관리자에게 문의하세요.`);
   }
 };

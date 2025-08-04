@@ -23,7 +23,7 @@
         </div>
         <h2 style="text-align: center; margin-bottom: 24px; color: #2c3e50;">담당자 로그인</h2>
         <div class="input-group">
-          <input type="text" id="manager-code" placeholder="담당자 코드" autocomplete="username" />
+          <input type="text" id="manager-code" placeholder="담당자 코드" autocomplete="username" style="text-transform: uppercase;" oninput="this.value = this.value.toUpperCase()" />
           <input type="password" id="manager-password" placeholder="비밀번호" autocomplete="current-password" />
         </div>
         <button id="login-btn" type="button" onclick="login()">로그인</button>
@@ -51,6 +51,10 @@
           <div class="manager-name" id="current-manager-name" style="font-weight: bold; font-size: 18px; color: #2c3e50;"></div>
           <div class="manager-code" id="current-manager-code" style="color: #666; font-size: 14px; margin-top: 4px;"></div>
           <div class="manager-team" id="current-manager-team" style="color: #666; font-size: 14px; margin-top: 2px;"></div>
+          <div style="display: flex; gap: 10px; margin-top: 15px;">
+            <button id="sidebar-logout-btn" onclick="logout()">로그아웃</button>
+            <button id="sidebar-password-btn" onclick="changePassword()">비밀번호 변경</button>
+          </div>
         </div>
         <ul class="sidebar-menu">
           <li id="menu-profile" class="active">
@@ -72,7 +76,6 @@
             <span class="sidebar-text">보험사 계정 관리</span>
           </li>
         </ul>
-        <button id="sidebar-logout-btn" onclick="logout()">로그아웃</button>
       </div>
 
       <div class="main-content" id="main-content">
@@ -118,14 +121,22 @@
 
           <div class="profile-card">
             <div class="card-header">
-              <h4><i class="fas fa-key"></i> 보안 설정</h4>
+              <h4><i class="fas fa-globe"></i> 가이아 계정 정보</h4>
             </div>
             <div class="card-body">
-              <button class="primary-btn" onclick="changePassword()">
-                <i class="fas fa-lock"></i> 비밀번호 변경
-              </button>
+              <div class="info-row">
+                <label>가이아 아이디:</label>
+                <span id="profile-gaia-id"></span>
+                <button class="edit-btn" onclick="editField('gaiaId')"><i class="fas fa-edit"></i></button>
+              </div>
+              <div class="info-row">
+                <label>가이아 비밀번호:</label>
+                <span id="profile-gaia-password"></span>
+                <button class="edit-btn" onclick="editField('gaiaPassword')"><i class="fas fa-edit"></i></button>
+              </div>
             </div>
           </div>
+
         </div>
 
         <!-- 담당 고객 조회 영역 -->
@@ -145,10 +156,16 @@
         <div id="insurance-section" class="content-section" style="display: none;">
           <h3 style="text-align: center;">보험사 계정 관리</h3>
           
+          <div class="search-area">
+            <input type="text" id="insurance-search" placeholder="보험사명으로 검색" />
+            <button type="button" id="insurance-search-reset" class="search-reset-btn" aria-label="초기화">
+              <i class="fas fa-redo-alt"></i>
+            </button>
+          </div>
+          
           <div class="insurance-container">
             <div class="insurance-category">
               <h4 class="category-header">
-                <i class="fas fa-heart" style="color: #e74c3c; margin-right: 8px;"></i>
                 <span>생명보험사</span>
                 <span class="category-count" id="life-count"></span>
               </h4>
@@ -157,7 +174,6 @@
             
             <div class="insurance-category">
               <h4 class="category-header">
-                <i class="fas fa-shield-alt" style="color: #3498db; margin-right: 8px;"></i>
                 <span>손해보험사</span>
                 <span class="category-count" id="nonlife-count"></span>
               </h4>
@@ -177,6 +193,11 @@
         </div>
         <div class="modal-body">
           <div class="form-group">
+            <div id="team-input-group" style="display: none; align-items: center; gap: 8px;">
+              <label style="margin-bottom: 0; margin-right: 8px;">팀명:</label>
+              <input type="text" id="edit-modal-team-input" placeholder="숫자만 입력" style="flex: 1;" />
+              <span style="font-weight: bold; color: #2c3e50;">팀</span>
+            </div>
             <label id="edit-modal-label">값:</label>
             <input type="text" id="edit-modal-input" style="display: none;" />
             <select id="edit-modal-select" style="display: none;">
@@ -231,26 +252,26 @@
     <div id="passwordModal" class="modal" style="display: none">
       <div class="modal-content">
         <div class="modal-header">
-          <h4>비밀번호 변경</h4>
+          <h4><i class="fas fa-key"></i> 비밀번호 변경</h4>
           <span class="close" id="closePasswordModal" onclick="closePasswordModal()">&times;</span>
         </div>
         <div class="modal-body">
           <div class="form-group">
             <label>현재 비밀번호:</label>
-            <input type="password" id="current-password" />
+            <input type="password" id="current-password" onkeypress="handlePasswordModalEnter(event)" />
           </div>
           <div class="form-group">
             <label>새 비밀번호:</label>
-            <input type="password" id="new-password" />
+            <input type="password" id="new-password" onkeypress="handlePasswordModalEnter(event)" />
           </div>
           <div class="form-group">
             <label>새 비밀번호 확인:</label>
-            <input type="password" id="confirm-password" />
+            <input type="password" id="confirm-password" onkeypress="handlePasswordModalEnter(event)" />
           </div>
         </div>
         <div class="modal-footer">
           <button class="secondary-btn" onclick="closePasswordModal()">취소</button>
-          <button class="primary-btn" onclick="savePassword()">변경</button>
+          <button class="primary-btn" id="save-password-btn" onclick="savePassword()">변경</button>
         </div>
       </div>
     </div>
@@ -287,7 +308,7 @@
           </div>
           <div class="form-group">
             <label>비밀번호:</label>
-            <input type="password" id="insurance-password" />
+            <input type="text" id="insurance-password" />
           </div>
         </div>
         <div class="modal-footer">

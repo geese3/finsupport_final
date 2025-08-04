@@ -84,7 +84,14 @@ let allClients = [];
 let pagedClients = [];
 let lastVisible = null;
 let isLoadingClients = false;
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 10; // 10개씩 표시하도록 변경
+
+// 페이지네이션을 위한 새로운 변수들
+let displayedClients = [];
+let displayedManagers = [];
+let currentClientPage = 0;
+let currentManagerPage = 0;
+const ITEMS_PER_PAGE = 10;
 
 // DOM 요소 접근을 위한 변수들
 let searchInput, cardList, detailModal, detailContent, closeModal;
@@ -252,12 +259,12 @@ function updateManagersList() {
     return `<div class=\"manager-item\" data-id=\"${m.id}\">\n      <span class=\"manager-name\" data-index=\"${index}\">${m.name}</span>\n      <span class=\"manager-url\" style=\"margin-left:8px; font-size:12px; color:#3498db; cursor:pointer; text-decoration:underline;\" data-url=\"${url}\">${m.code ? '링크' : ''}</span>\n      <button class=\"edit-manager\" data-id=\"${m.id}\">수정</button>\n      <button class=\"delete-manager\" data-id=\"${m.id}\">삭제</button>\n    </div>`;
   }).join('');
   // 카드리스트도 새로고침
-  renderCards(allClients);
+  renderCards(allClients, true);
 
   // 담당자 정보 조회 페이지가 활성화되어 있으면 담당자 카드도 업데이트
   const managerInfoSection = document.getElementById('manager-info-section');
   if (managerInfoSection && managerInfoSection.style.display !== 'none') {
-    renderManagerCards(managers);
+    renderManagerCards(managers, true);
   }
 
   // 링크 클릭 시 복사 이벤트 등록
@@ -444,7 +451,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (searchResetBtn && searchInput && cardList) {
     searchResetBtn.addEventListener('click', () => {
       searchInput.value = '';
-      renderCards(allClients);
+      renderCards(allClients, true); // reset = true로 처음부터 시작
     });
   }
 
@@ -453,7 +460,57 @@ document.addEventListener('DOMContentLoaded', () => {
   if (managerSearchResetBtn && managerSearchInput && managerCardList) {
     managerSearchResetBtn.addEventListener('click', () => {
       managerSearchInput.value = '';
-      renderManagerCards(managers);
+      renderManagerCards(managers, true); // reset = true로 처음부터 시작
+    });
+  }
+
+  // 고객 더보기 버튼 이벤트 리스너
+  const clientLoadMoreBtn = document.getElementById('clientLoadMoreBtn');
+  if (clientLoadMoreBtn) {
+    clientLoadMoreBtn.addEventListener('click', () => {
+      const keyword = searchInput ? searchInput.value.trim() : '';
+      let dataToShow;
+      
+      if (keyword) {
+        // 검색 중일 때
+        dataToShow = allClients.filter(
+          (client) =>
+            (client.name && client.name.includes(keyword)) ||
+            (client.phone && client.phone.replace(/-/g, "").includes(keyword.replace(/-/g, ""))) ||
+            (client.manager && client.manager.includes(keyword))
+        );
+      } else {
+        // 전체 데이터 표시
+        dataToShow = allClients;
+      }
+      
+      renderCards(dataToShow, false); // reset = false로 추가 로딩
+    });
+  }
+
+  // 담당자 더보기 버튼 이벤트 리스너
+  const managerLoadMoreBtn = document.getElementById('managerLoadMoreBtn');
+  if (managerLoadMoreBtn) {
+    managerLoadMoreBtn.addEventListener('click', () => {
+      const managerSearchInput = document.getElementById('managerSearchInput');
+      const keyword = managerSearchInput ? managerSearchInput.value.trim() : '';
+      let dataToShow;
+      
+      if (keyword) {
+        // 검색 중일 때
+        dataToShow = managers.filter(
+          (manager) =>
+            (manager.name && manager.name.includes(keyword)) ||
+            (manager.code && manager.code.toLowerCase().includes(keyword.toLowerCase())) ||
+            (manager.team && manager.team.includes(keyword)) ||
+            (manager.role && manager.role.includes(keyword))
+        );
+      } else {
+        // 전체 데이터 표시
+        dataToShow = managers;
+      }
+      
+      renderManagerCards(dataToShow, false); // reset = false로 추가 로딩
     });
   }
 
@@ -466,14 +523,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  setupInfiniteScroll();
+  // setupInfiniteScroll(); // 페이지네이션으로 대체
 });
 
 // 검색 처리 함수 (고객명, 전화번호, 담당자명 모두 검색)
 function handleSearch() {
   const keyword = this.value.trim();
   if (!keyword) {
-    renderCards(pagedClients.length > 0 ? pagedClients : allClients);
+    renderCards(allClients, true); // reset = true로 처음부터 시작
     return;
   }
   const filtered = allClients.filter(
@@ -482,14 +539,14 @@ function handleSearch() {
       (client.phone && client.phone.replace(/-/g, "").includes(keyword.replace(/-/g, ""))) ||
       (client.manager && client.manager.includes(keyword))
   );
-  renderCards(filtered);
+  renderCards(filtered, true); // reset = true로 처음부터 시작
 }
 
 // 담당자 검색 처리 함수
 function handleManagerSearch() {
   const keyword = this.value.trim();
   if (!keyword) {
-    renderManagerCards(managers);
+    renderManagerCards(managers, true); // reset = true로 처음부터 시작
     return;
   }
   const filtered = managers.filter(
@@ -499,7 +556,7 @@ function handleManagerSearch() {
       (manager.team && manager.team.includes(keyword)) ||
       (manager.role && manager.role.includes(keyword))
   );
-  renderManagerCards(filtered);
+  renderManagerCards(filtered, true); // reset = true로 처음부터 시작
 }
 
 // 로그인/로그아웃 시 body에 login-mode 클래스 토글
@@ -637,16 +694,31 @@ function loadAdminData() {
   toggleMigrationButton();
 }
 
-// 카드 렌더링 (고객 담당자명 표시 및 미지정 시 배정 기능)
-function renderCards(data) {
+// 고객 카드 페이지네이션 렌더링
+function renderCards(data, reset = true) {
   if (!cardList) return;
   if (!data || data.length === 0) {
     cardList.innerHTML = '<div class="search-guide">등록된 고객 정보가 없습니다.</div>';
+    updateClientLoadMoreButton([], 0);
     return;
   }
-  cardList.innerHTML = "";
-  // 중복 제거 없이 모든 고객 표시
-  data.forEach((client) => {
+  
+  if (reset) {
+    currentClientPage = 0;
+    displayedClients = [];
+    cardList.innerHTML = "";
+  }
+  
+  // 현재 페이지에 표시할 데이터 계산
+  const startIndex = currentClientPage * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const currentPageData = data.slice(startIndex, endIndex);
+  
+  // 새로운 데이터를 displayedClients에 추가
+  displayedClients = displayedClients.concat(currentPageData);
+  
+  // 현재 페이지 데이터만 렌더링
+  currentPageData.forEach((client) => {
     const card = document.createElement("div");
     card.className = "client-card";
     let phoneDisplay = client.phone || "";
@@ -694,7 +766,7 @@ function renderCards(data) {
       try {
         await updateDoc(doc(db, 'client_info', client.id), { manager: selectedManager });
         client.manager = selectedManager;
-        renderCards(data); // 새로고침
+        renderCards(allClients, true); // 새로고침
         alert('담당자가 배정되었습니다.');
       } catch (err) {
         alert('담당자 배정에 실패했습니다.');
@@ -702,6 +774,124 @@ function renderCards(data) {
     });
     cardList.appendChild(card);
   });
+  
+  // 더보기 버튼 상태 업데이트
+  updateClientLoadMoreButton(data, currentClientPage + 1);
+  
+  // 페이지 카운트 증가
+  currentClientPage++;
+}
+
+// 고객 더보기 버튼 상태 업데이트
+function updateClientLoadMoreButton(allData, nextPage) {
+  const loadMoreContainer = document.getElementById('clientLoadMore');
+  const loadMoreBtn = document.getElementById('clientLoadMoreBtn');
+  const remainingCount = document.getElementById('clientRemainingCount');
+  
+  if (!loadMoreContainer || !loadMoreBtn || !remainingCount) return;
+  
+  const totalItems = allData.length;
+  const displayedItems = nextPage * ITEMS_PER_PAGE;
+  const remaining = Math.max(0, totalItems - displayedItems);
+  
+  if (remaining > 0) {
+    loadMoreContainer.style.display = 'block';
+    remainingCount.textContent = remaining;
+    loadMoreBtn.disabled = false;
+  } else {
+    loadMoreContainer.style.display = 'none';
+  }
+}
+
+// 담당자 카드 페이지네이션 렌더링
+function renderManagerCards(data, reset = true) {
+  const managerCardList = document.getElementById("managerCardList");
+  if (!managerCardList) return;
+  
+  if (!data || data.length === 0) {
+    managerCardList.innerHTML = '<div class="search-guide">등록된 담당자가 없습니다.</div>';
+    updateManagerLoadMoreButton([], 0);
+    return;
+  }
+  
+  if (reset) {
+    currentManagerPage = 0;
+    displayedManagers = [];
+    managerCardList.innerHTML = "";
+  }
+  
+  // 현재 페이지에 표시할 데이터 계산
+  const startIndex = currentManagerPage * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const currentPageData = data.slice(startIndex, endIndex);
+  
+  // 새로운 데이터를 displayedManagers에 추가
+  displayedManagers = displayedManagers.concat(currentPageData);
+  
+  // 현재 페이지 데이터만 렌더링
+  currentPageData.forEach((manager) => {
+    const card = document.createElement("div");
+    card.className = "manager-card";
+    
+    // 담당자별 고객 수 조회
+    const clientCount = allClients.filter(client => client.manager === manager.name).length;
+    
+    // 핸드폰번호 표시 준비
+    let phoneDisplay = '';
+    if (manager.phone) {
+      phoneDisplay = manager.phoneCarrier ? `(${manager.phoneCarrier}) ${manager.phone}` : manager.phone;
+    }
+
+    // 팀명과 직급을 이름 옆에 표시할 텍스트 생성
+    const teamRoleText = [];
+    if (manager.team) teamRoleText.push(manager.team);
+    if (manager.role) teamRoleText.push(manager.role);
+    const teamRoleDisplay = teamRoleText.length > 0 ? ` (${teamRoleText.join(', ')})` : '';
+
+    card.innerHTML = `
+      <div class="name" style='display:flex; justify-content:space-between; align-items:center;'>
+        <span>${manager.name}<span style='font-size:14px; color:#666;'>${teamRoleDisplay}</span></span>
+        <span style='font-size:13px; color:#888; margin-left:12px;'>${manager.code || ''}</span>
+      </div>
+      <div class="manager-details">
+        ${manager.gaiaId ? `<div style="color: #6c757d; font-size: 13px; margin-bottom: 4px;">가이아: ${manager.gaiaId}</div>` : ''}
+        ${phoneDisplay ? `<div style="color: #6c757d; font-size: 13px; margin-bottom: 4px;">${phoneDisplay}</div>` : ''}
+        <div class="client-count" style="color: #27ae60; font-size: 14px;">
+          담당 고객: ${clientCount}명
+        </div>
+      </div>
+    `;
+    
+    card.onclick = () => showManagerDetail(manager);
+    managerCardList.appendChild(card);
+  });
+  
+  // 더보기 버튼 상태 업데이트
+  updateManagerLoadMoreButton(data, currentManagerPage + 1);
+  
+  // 페이지 카운트 증가
+  currentManagerPage++;
+}
+
+// 담당자 더보기 버튼 상태 업데이트
+function updateManagerLoadMoreButton(allData, nextPage) {
+  const loadMoreContainer = document.getElementById('managerLoadMore');
+  const loadMoreBtn = document.getElementById('managerLoadMoreBtn');
+  const remainingCount = document.getElementById('managerRemainingCount');
+  
+  if (!loadMoreContainer || !loadMoreBtn || !remainingCount) return;
+  
+  const totalItems = allData.length;
+  const displayedItems = nextPage * ITEMS_PER_PAGE;
+  const remaining = Math.max(0, totalItems - displayedItems);
+  
+  if (remaining > 0) {
+    loadMoreContainer.style.display = 'block';
+    remainingCount.textContent = remaining;
+    loadMoreBtn.disabled = false;
+  } else {
+    loadMoreContainer.style.display = 'none';
+  }
 }
 
 // 상세 정보 표시 (수정/삭제 버튼 및 인라인 수정 폼 추가)
@@ -1114,7 +1304,7 @@ async function showDetail(client) {
           if (searchInput && searchInput.value.trim()) {
               handleSearch.call(searchInput);
           } else {
-              renderCards(allClients);
+              renderCards(allClients, true);
           }
 
           alert('고객 정보가 성공적으로 삭제되었습니다.');
@@ -1137,54 +1327,6 @@ async function showDetail(client) {
   }
 }
 
-// 담당자 카드 렌더링 함수
-function renderManagerCards(data) {
-  const managerCardList = document.getElementById("managerCardList");
-  if (!managerCardList) return;
-  
-  if (!data || data.length === 0) {
-    managerCardList.innerHTML = '<div class="search-guide">등록된 담당자가 없습니다.</div>';
-    return;
-  }
-  
-  managerCardList.innerHTML = "";
-  data.forEach((manager) => {
-    const card = document.createElement("div");
-    card.className = "manager-card";
-    
-    // 담당자별 고객 수 조회
-    const clientCount = allClients.filter(client => client.manager === manager.name).length;
-    
-    // 핸드폰번호 표시 준비
-    let phoneDisplay = '';
-    if (manager.phone) {
-      phoneDisplay = manager.phoneCarrier ? `(${manager.phoneCarrier}) ${manager.phone}` : manager.phone;
-    }
-
-    // 팀명과 직급을 이름 옆에 표시할 텍스트 생성
-    const teamRoleText = [];
-    if (manager.team) teamRoleText.push(manager.team);
-    if (manager.role) teamRoleText.push(manager.role);
-    const teamRoleDisplay = teamRoleText.length > 0 ? ` (${teamRoleText.join(', ')})` : '';
-
-    card.innerHTML = `
-      <div class="name" style='display:flex; justify-content:space-between; align-items:center;'>
-        <span>${manager.name}<span style='font-size:14px; color:#666;'>${teamRoleDisplay}</span></span>
-        <span style='font-size:13px; color:#888; margin-left:12px;'>${manager.code || ''}</span>
-      </div>
-      <div class="manager-details">
-        ${manager.gaiaId ? `<div style="color: #6c757d; font-size: 13px; margin-bottom: 4px;">가이아: ${manager.gaiaId}</div>` : ''}
-        ${phoneDisplay ? `<div style="color: #6c757d; font-size: 13px; margin-bottom: 4px;">${phoneDisplay}</div>` : ''}
-        <div class="client-count" style="color: #27ae60; font-size: 14px;">
-          담당 고객: ${clientCount}명
-        </div>
-      </div>
-    `;
-    
-    card.onclick = () => showManagerDetail(manager);
-    managerCardList.appendChild(card);
-  });
-}
 
 // 한글-영문 자판 매핑 테이블 (수정된 버전)
 const koreanToEnglishMap = {
@@ -1817,7 +1959,11 @@ function showManagerDetail(manager) {
         </div>
         <div class='modal-body'>
           <div style='margin-bottom:20px;'><label class="editClientInfoTitle"><b>담당자명:</b></label> <input type='text' class="editClientInfoInput" id='edit-manager-name' value='${manager.name || ''}' /></div>
-          <div style='margin-bottom:20px;'><label class="editClientInfoTitle"><b>팀:</b></label> <input type='text' class="editClientInfoInput" id='edit-manager-team' value='${teamDisplay}' placeholder='숫자만 입력 (예: 3)' /></div>
+          <div style='margin-bottom:20px; display: flex; align-items: center; gap: 8px;'>
+            <label class="editClientInfoTitle" style='margin-bottom: 0;'><b>팀:</b></label> 
+            <input type='text' class="editClientInfoInput" id='edit-manager-team' value='${teamDisplay}' placeholder='숫자만 입력 (예: 3)' style='flex: 1;' />
+            <span style='font-weight: bold; color: #2c3e50;'>팀</span>
+          </div>
           <div style='margin-bottom:20px;'><label class="editClientInfoTitle"><b>직급:</b></label> 
             <select class="editClientInfoInput" id='edit-manager-role'>
               <option value="">직급 선택</option>
@@ -2432,14 +2578,14 @@ function initMenuSwitch() {
     const managerSearchInput = document.getElementById('managerSearchInput');
     if (managerSearchInput) {
       managerSearchInput.value = '';
-      renderManagerCards(managers); // 전체 담당자 데이터 표시
+      renderManagerCards(managers, true); // 전체 담당자 데이터 표시
     }
     
     // 고객 정보 관리 검색창 초기화 및 전체 데이터 표시
     const searchInput = document.getElementById('searchInput');
     if (searchInput) {
       searchInput.value = '';
-      renderCards(allClients); // 전체 고객 데이터 표시
+      renderCards(allClients, true); // 전체 고객 데이터 표시
     }
   });
   
@@ -2459,12 +2605,12 @@ function initMenuSwitch() {
     const searchInput = document.getElementById('searchInput');
     if (searchInput) {
       searchInput.value = '';
-      renderCards(allClients); // 전체 고객 데이터 표시
+      renderCards(allClients, true); // 전체 고객 데이터 표시
     }
     
     // 담당자 정보 조회 페이지 진입 시 담당자 카드 렌더링
     setTimeout(() => {
-      renderManagerCards(managers);
+      renderManagerCards(managers, true);
     }, 100); // 약간의 지연을 주어 managers 데이터가 로드되도록 함
   });
   
@@ -2484,11 +2630,11 @@ function initMenuSwitch() {
     const managerSearchInput = document.getElementById('managerSearchInput');
     if (managerSearchInput) {
       managerSearchInput.value = '';
-      renderManagerCards(managers); // 전체 담당자 데이터 표시
+      renderManagerCards(managers, true); // 전체 담당자 데이터 표시
     }
     
     // 고객 정보 관리 페이지 진입 시 전체 고객 데이터 표시
-    renderCards(allClients);
+    renderCards(allClients, true);
   });
 }
 
@@ -2534,7 +2680,7 @@ function listenClients() {
   const q = query(fsCollection(db, "client_info"), orderBy("created_at", "desc"));
   onSnapshot(q, (snapshot) => {
     allClients = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-    renderCards(allClients);
+    renderCards(allClients, true);
   });
 }
 
@@ -2721,10 +2867,13 @@ async function showFieldEditModal(manager, fieldType) {
         </div>
         
         <div style="margin-bottom: 20px;">
-          <label style="display: block; margin-bottom: 8px; font-weight: bold;">팀:</label>
-          <input type="text" id="field-modal-input" value="${manager.team || ''}" placeholder="팀명 입력 (예: 3)"
-                 style="width: 100%; max-width: 250px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;" />
-          <div style="font-size: 12px; color: #666; margin-top: 4px;">※ 숫자만 입력하면 자동으로 '팀'이 붙습니다</div>
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+            <label style="font-weight: bold; margin: 0;">팀:</label>
+            <input type="text" id="field-modal-input" value="${manager.team && manager.team.endsWith('팀') ? manager.team.slice(0, -1) : manager.team || ''}" placeholder="숫자만 입력 (예: 3)"
+                   style="flex: 1; max-width: 200px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; box-sizing: border-box;" />
+            <span style="font-weight: bold; color: #2c3e50;">팀</span>
+          </div>
+          <div style="font-size: 12px; color: #666;">※ 숫자만 입력하면 자동으로 '팀'이 붙습니다</div>
         </div>
       `;
       break;
@@ -3004,8 +3153,6 @@ window.setupBulkPasswords = async function() {
       return;
     }
 
-    console.log('현재 로그인된 사용자:', currentUser.email);
-    
     const bulkBtn = document.getElementById('bulkPasswordBtn');
     const originalText = bulkBtn.innerHTML;
     bulkBtn.disabled = true;

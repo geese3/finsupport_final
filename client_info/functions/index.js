@@ -10,7 +10,6 @@
 const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const CryptoJS = require("crypto-js");
-// cors는 HTTP 함수에서만 사용하므로 제거
 const dotenv = require("dotenv");
 dotenv.config();
 
@@ -90,13 +89,9 @@ exports.encryptSSN = functions.https.onCall(async (data, context) => {
 
 // 주민등록번호만 복호화하는 함수 (관리자 페이지에서 사용)
 exports.decryptSSN = functions.https.onCall(async (data, context) => {
-  console.log("=== decryptSSN 함수 호출 ===");
-  console.log("context.auth:", context.auth);
-  console.log("data:", data);
-
   // 임시: 인증 체크 완화 (인증 문제 해결 시까지)
   if (!context.auth) {
-    console.log("인증 없이 복호화 요청 - 임시 허용");
+    // 인증 없이 복호화 요청 - 임시 허용
   } else if (!allowedAdmins.includes(context.auth.token.email)) {
     throw new functions.https.HttpsError(
       "permission-denied",
@@ -132,7 +127,6 @@ exports.decryptSSN = functions.https.onCall(async (data, context) => {
                               !ssn.match(/^[A-Za-z0-9+/].*={0,2}$/);
 
     if (isLikelyPlaintext) {
-      console.log("평문 데이터로 판단됨, 그대로 반환:", ssn.substring(0, 5) + "...");
       return {
         ssn: ssn,
       };
@@ -156,7 +150,6 @@ exports.decryptSSN = functions.https.onCall(async (data, context) => {
       ssn: decryptedSSN || "복호화 실패",
     };
   } catch (error) {
-    console.log("복호화 처리 중 오류:", error.message);
     throw new functions.https.HttpsError(
       "internal",
       "복호화 처리 중 오류가 발생했습니다.",
@@ -334,7 +327,7 @@ exports.saveClientInfo = functions.https.onCall(async (data, context) => {
 exports.getMigrationMode = functions.https.onCall(async (data, context) => {
   // 임시: 인증 체크 완화 (클라이언트 인증 문제 해결 후 제거 예정)
   if (!context.auth) {
-    console.log("인증 없이 마이그레이션 모드 조회 - 임시 허용");
+    // 인증 없이 마이그레이션 모드 조회 - 임시 허용
   } else if (!allowedAdmins.includes(context.auth.token.email)) {
     throw new functions.https.HttpsError(
       "permission-denied",
@@ -350,7 +343,7 @@ exports.getMigrationMode = functions.https.onCall(async (data, context) => {
 exports.migrateSSNEncryption = functions.https.onCall(async (data, context) => {
   // 임시: 인증 체크 완화 (클라이언트 인증 문제 해결 후 제거 예정)
   if (!context.auth) {
-    console.log("인증 없이 마이그레이션 요청 - 임시 허용");
+    // 인증 없이 마이그레이션 요청 - 임시 허용
   } else if (!allowedAdmins.includes(context.auth.token.email)) {
     throw new functions.https.HttpsError(
       "permission-denied",
@@ -426,7 +419,7 @@ exports.migrateSSNEncryption = functions.https.onCall(async (data, context) => {
 exports.updateManagerInfo = functions.https.onCall(async (data, context) => {
   // 임시: 인증 체크 완화 (인증 문제 해결 시까지)
   if (!context.auth) {
-    console.log("인증 없이 담당자 업데이트 요청 - 임시 허용");
+    // 인증 없이 담당자 업데이트 요청 - 임시 허용
   } else if (!allowedAdmins.includes(context.auth.token.email)) {
     throw new functions.https.HttpsError(
       "permission-denied",
@@ -450,7 +443,6 @@ exports.updateManagerInfo = functions.https.onCall(async (data, context) => {
 
     // createdAt 보존 (순서 유지를 위해)
     if (cleanData.createdAt) {
-      console.log("기존 createdAt 보존:", cleanData.createdAt);
       // Firestore Timestamp로 변환 (필요한 경우)
       if (typeof cleanData.createdAt === "object" && cleanData.createdAt.seconds) {
         cleanData.createdAt = admin.firestore.Timestamp.fromDate(new Date(cleanData.createdAt.seconds * 1000));
@@ -458,7 +450,6 @@ exports.updateManagerInfo = functions.https.onCall(async (data, context) => {
     } else {
       // createdAt이 없는 경우 현재 시간으로 설정 (새 담당자)
       cleanData.createdAt = admin.firestore.FieldValue.serverTimestamp();
-      console.log("새로운 createdAt 설정");
     }
 
     const encryptKey = getEncryptKey();
@@ -566,16 +557,10 @@ exports.setManagerPassword = functions.https.onCall(async (data, context) => {
 // 담당자 로그인 인증 함수
 exports.authenticateManager = functions.https.onCall(async (data, context) => {
   try {
-    console.log("=== authenticateManager 함수 호출 ===");
-    console.log("입력 데이터:", data);
-    console.log("컨텍스트:", context);
-
     // 데이터는 data.data 안에 있음
     const {code, password} = data.data || data;
-    console.log("추출된 값:", {code, password: password ? "****" : "없음"});
 
     if (!code || !password) {
-      console.error("필수 값 누락:", {code: !!code, password: !!password});
       throw new functions.https.HttpsError(
         "invalid-argument",
         "담당자 코드와 비밀번호가 필요합니다.",
@@ -640,12 +625,8 @@ exports.authenticateManager = functions.https.onCall(async (data, context) => {
 // 담당자 본인 비밀번호 변경 함수
 exports.changeManagerPassword = functions.https.onCall(async (data, context) => {
   try {
-    console.log("=== changeManagerPassword 함수 호출 ===");
-    console.log("입력 데이터:", data);
-
     // 데이터는 data.data 안에 있을 수 있음
     const {managerId, currentPassword, newPassword} = data.data || data;
-    console.log("추출된 값:", {managerId, currentPassword: currentPassword ? "****" : "없음", newPassword: newPassword ? "****" : "없음"});
 
     if (!managerId || !currentPassword || !newPassword) {
       throw new functions.https.HttpsError(
@@ -705,7 +686,7 @@ exports.changeManagerPassword = functions.https.onCall(async (data, context) => 
 exports.setupBulkManagerPasswords = functions.https.onCall(async (data, context) => {
   // 임시: 인증 체크 완화 (인증 문제 해결 시까지)
   if (!context.auth) {
-    console.log("인증 없이 일괄 비밀번호 설정 요청 - 임시 허용");
+    // 인증 없이 일괄 비밀번호 설정 요청 - 임시 허용
   } else if (!allowedAdmins.includes(context.auth.token.email)) {
     throw new functions.https.HttpsError(
       "permission-denied",
