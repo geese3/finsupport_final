@@ -1506,7 +1506,7 @@ async function restoreSession() {
     if (managerData) {
       currentManager = managerData;
       
-      // 메인 페이지 표시
+      // 메인 페이지 표시 (로딩 화면은 DOMContentLoaded에서 숨김)
       document.getElementById('login-form').style.display = 'none';
       document.getElementById('main-container').style.display = 'flex';
       
@@ -1555,15 +1555,33 @@ async function getManagerByCode(code) {
   return null;
 }
 
+// 로딩 화면 숨기기 함수
+function hideLoadingScreen() {
+  const loadingScreen = document.getElementById('loading-screen');
+  if (loadingScreen) {
+    loadingScreen.style.display = 'none';
+  }
+}
+
 // DOM 로드 후 초기화
 document.addEventListener('DOMContentLoaded', async function() {
-  // 먼저 세션 복원 시도
-  const sessionRestored = await restoreSession();
-  
-  if (!sessionRestored) {
-    // 세션 복원 실패 시 로그인 폼 표시
+  try {
+    // 먼저 세션 복원 시도
+    const sessionRestored = await restoreSession();
+    
+    if (!sessionRestored) {
+      // 세션 복원 실패 시 로그인 폼 표시
+      document.getElementById('login-form').style.display = 'flex';
+      document.getElementById('main-container').style.display = 'none';
+    }
+  } catch (error) {
+    console.error('초기화 중 오류:', error);
+    // 오류 발생 시 로그인 폼 표시
     document.getElementById('login-form').style.display = 'flex';
     document.getElementById('main-container').style.display = 'none';
+  } finally {
+    // 로딩 화면 숨기기
+    hideLoadingScreen();
   }
   
   // 모바일 햄버거 메뉴 이벤트
