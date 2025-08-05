@@ -4,6 +4,16 @@ import { getFirestore, collection, getDocs, query, where, doc, updateDoc, collec
 import { getStorage, ref, deleteObject } from "https://www.gstatic.com/firebasejs/11.8.0/firebase-storage.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/11.8.0/firebase-functions.js";
 import { db } from "./database.js";
+import { 
+  lifeInsuranceCompanies, 
+  nonLifeInsuranceCompanies, 
+  insuranceCompanies, 
+  lifeCompanies, 
+  nonLifeCompanies,
+  getInsuranceCompanyKey,
+  getInsuranceCompanyName,
+  getInsuranceCompanyType
+} from "./insurance-companies.js";
 
 // Firebase 설정
 const firebaseConfig = {
@@ -103,53 +113,7 @@ const allowedAdmins = [
   "offbeatt@naver.com",
 ];
 
-// 보험사 목록 정의 (담당자별 사원번호/비밀번호 관리용)
-const lifeInsuranceCompanies = [
-  { name: 'ABL생명', key: 'abl' },
-  { name: '흥국생명', key: 'heungkuk_life' },
-  { name: '라이나생명', key: 'lina' },
-  { name: '동양생명', key: 'dongyang' },
-  { name: '미래에셋생명', key: 'mirae' },
-  { name: '처브라이프생명', key: 'chubb_life' },
-  { name: 'KB생명', key: 'kb_life' },
-  { name: 'KDB생명', key: 'kdb' },
-  { name: '삼성생명', key: 'samsung_life' },
-  { name: '농협생명', key: 'nh_life' },
-  { name: 'DGB생명', key: 'dgb' },
-  { name: '한화생명', key: 'hanwha_life' },
-  { name: '카디프생명', key: 'cardif' },
-  { name: '신한라이프', key: 'shinhan' },
-  { name: '오렌지라이프', key: 'orange' },
-  { name: '푸본현대생명', key: 'fubon' },
-  { name: '푸르덴셜생명', key: 'prudential' },
-  { name: '메트라이프생명', key: 'metlife' },
-  { name: '하나생명', key: 'hana_life' },
-  { name: '교보생명', key: 'kyobo' }
-];
-
-const nonLifeInsuranceCompanies = [
-  { name: '메리츠화재', key: 'meritz' },
-  { name: '한화손해', key: 'hanwha_nonlife' },
-  { name: '현대해상', key: 'hyundai' },
-  { name: 'DB손해', key: 'db' },
-  { name: '삼성화재', key: 'samsung_fire' },
-  { name: 'KB손해', key: 'kb_nonlife' },
-  { name: 'MG손해보험', key: 'mg' },
-  { name: '롯데손보', key: 'lotte' },
-  { name: '흥국화재', key: 'heungkuk_fire' },
-  { name: '농협손보', key: 'nh_nonlife' },
-  { name: '하나손해', key: 'hana_nonlife' },
-  { name: '처브손해', key: 'chubb_nonlife' }
-];
-
-// 기존 보험사 목록 (호환성 유지)
-const insuranceCompanies = [
-  ...lifeInsuranceCompanies.map(comp => comp.name),
-  ...nonLifeInsuranceCompanies.map(comp => comp.name)
-];
-
-const lifeCompanies = lifeInsuranceCompanies.map(comp => comp.name);
-const nonLifeCompanies = nonLifeInsuranceCompanies.map(comp => comp.name);
+// 보험사 목록은 insurance-companies.js 모듈에서 import됩니다
 
 // Firestore managers 컬렉션 연동
 let managers = [];
@@ -3262,7 +3226,7 @@ async function resetManagerPassword(managerId) {
     alert('✅ 비밀번호가 초기화되었습니다.\n\n새 비밀번호: 0000\n\n담당자에게 알려주세요.');
     
     // 담당자 목록 새로고침
-    await loadManagers();
+    await fetchManagers();
     
     // 모달이 열려있다면 닫기
     const modal = document.getElementById('modal');
@@ -3282,6 +3246,282 @@ async function resetManagerPassword(managerId) {
     
     alert(`❌ ${errorMessage}\n\n${error.message || error}`);
   }
+}
+
+// 엑셀 파일 업로드 관련 전역 변수
+let excelData = null;
+
+// 엑셀 파일 처리 함수
+window.handleExcelFile = function(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  // 파일명 표시
+  document.getElementById('selectedFileName').textContent = file.name;
+  document.getElementById('uploadExcelBtn').style.display = 'inline-flex';
+  
+  // 파일 읽기
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, { type: 'array' });
+      
+      // 첫 번째 시트 가져오기
+      const firstSheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[firstSheetName];
+      
+      // JSON으로 변환
+      excelData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+      
+      console.log('엑셀 데이터 로드 완료:', excelData.length, '행');
+      
+    } catch (error) {
+      console.error('엑셀 파일 처리 오류:', error);
+      alert('엑셀 파일을 읽는 중 오류가 발생했습니다.');
+    }
+  };
+  
+  reader.readAsArrayBuffer(file);
+};
+
+// 엑셀 데이터 업로드 함수
+window.uploadExcelData = async function() {
+  if (!excelData || excelData.length === 0) {
+    alert('엑셀 파일을 먼저 선택해주세요.');
+    return;
+  }
+  
+  if (!confirm('엑셀 파일의 데이터를 업로드하시겠습니까?\n\n※ 기존 데이터가 있는 경우 덮어쓰기됩니다.')) {
+    return;
+  }
+  
+  // 진행률 표시
+  const progressContainer = document.getElementById('uploadProgress');
+  const progressBar = document.getElementById('progressBar');
+  const progressText = document.getElementById('progressText');
+  const resultContainer = document.getElementById('uploadResult');
+  
+  progressContainer.style.display = 'block';
+  resultContainer.style.display = 'none';
+  
+  try {
+    // 헤더 행 찾기 (첫 번째 행)
+    const headers = excelData[0];
+    console.log('엑셀 헤더:', headers);
+    
+    // 헤더에서 필요한 컬럼 인덱스 찾기
+    const columnMapping = findColumnMappings(headers);
+    console.log('컬럼 매핑:', columnMapping);
+    
+    if (!columnMapping.managerName) {
+      alert('담당자명(사원명) 컬럼을 찾을 수 없습니다.');
+      return;
+    }
+    
+    // 데이터 행들 처리
+    const dataRows = excelData.slice(1); // 헤더 제외
+    let processedCount = 0;
+    let successCount = 0;
+    let errorCount = 0;
+    const errors = [];
+    
+    for (let i = 0; i < dataRows.length; i++) {
+      const row = dataRows[i];
+      
+      // 진행률 업데이트
+      const progress = ((i + 1) / dataRows.length) * 100;
+      progressBar.style.width = progress + '%';
+      progressText.textContent = `처리 중... ${i + 1}/${dataRows.length} (${Math.round(progress)}%)`;
+      
+      try {
+        // 빈 행 건너뛰기
+        if (!row || row.length === 0 || !row[columnMapping.managerName]) {
+          continue;
+        }
+        
+        const managerName = row[columnMapping.managerName]?.toString().trim();
+        if (!managerName) continue;
+        
+        // 담당자 찾기 (이름으로 매칭)
+        const manager = managers.find(m => m.name === managerName);
+        if (!manager) {
+          errors.push(`행 ${i + 2}: 담당자명 '${managerName}' 을(를) 찾을 수 없습니다.`);
+          errorCount++;
+          continue;
+        }
+        
+        // 업데이트 데이터 준비
+        const updateData = {
+          managerId: manager.id,
+          code: manager.code,
+          createdAt: manager.createdAt
+        };
+        
+        // 가이아 아이디 처리 (사원번호를 가이아 아이디로 사용)
+        if (columnMapping.employeeNumber && row[columnMapping.employeeNumber]) {
+          updateData.gaiaId = row[columnMapping.employeeNumber].toString().trim();
+        }
+        
+        // 보험사 계정 정보 처리
+        const insuranceAccounts = {};
+        let hasInsuranceData = false;
+        
+        // 생명보험사 처리
+        lifeInsuranceCompanies.forEach(company => {
+          const employeeIdCol = columnMapping.insuranceAccounts[company.key]?.employeeId;
+          const passwordCol = columnMapping.insuranceAccounts[company.key]?.password;
+          
+          if (employeeIdCol !== undefined || passwordCol !== undefined) {
+            const employeeId = employeeIdCol !== undefined ? (row[employeeIdCol]?.toString().trim() || '') : '';
+            const password = passwordCol !== undefined ? (row[passwordCol]?.toString().trim() || '') : '';
+            
+            if (employeeId || password) {
+              insuranceAccounts[company.key] = { employeeId, password };
+              hasInsuranceData = true;
+            }
+          }
+        });
+        
+        // 손해보험사 처리
+        nonLifeInsuranceCompanies.forEach(company => {
+          const employeeIdCol = columnMapping.insuranceAccounts[company.key]?.employeeId;
+          const passwordCol = columnMapping.insuranceAccounts[company.key]?.password;
+          
+          if (employeeIdCol !== undefined || passwordCol !== undefined) {
+            const employeeId = employeeIdCol !== undefined ? (row[employeeIdCol]?.toString().trim() || '') : '';
+            const password = passwordCol !== undefined ? (row[passwordCol]?.toString().trim() || '') : '';
+            
+            if (employeeId || password) {
+              insuranceAccounts[company.key] = { employeeId, password };
+              hasInsuranceData = true;
+            }
+          }
+        });
+        
+        if (hasInsuranceData) {
+          updateData.insuranceAccounts = insuranceAccounts;
+        }
+        
+        // Firebase Functions를 통해 업데이트
+        const updateManagerFunction = httpsCallable(functions, 'updateManagerInfo');
+        await updateManagerFunction(updateData);
+        
+        successCount++;
+        
+      } catch (error) {
+        console.error(`행 ${i + 2} 처리 오류:`, error);
+        errors.push(`행 ${i + 2}: ${error.message || error}`);
+        errorCount++;
+      }
+      
+      processedCount++;
+      
+      // UI 업데이트를 위한 짧은 대기
+      if (i % 10 === 0) {
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+    }
+    
+    // 완료 메시지
+    progressBar.style.width = '100%';
+    progressText.textContent = '업로드 완료!';
+    
+    // 결과 표시
+    let resultHtml = `
+      <div style="padding: 15px; background: #f8f9fa; border-radius: 6px; border-left: 4px solid #28a745;">
+        <h6 style="margin: 0 0 10px 0; color: #155724;">
+          <i class="fas fa-check-circle"></i> 업로드 완료
+        </h6>
+        <div style="color: #155724; font-size: 14px;">
+          <div>• 처리된 행: ${processedCount}개</div>
+          <div>• 성공: ${successCount}개</div>
+          <div>• 오류: ${errorCount}개</div>
+        </div>
+      </div>
+    `;
+    
+    if (errors.length > 0) {
+      resultHtml += `
+        <div style="margin-top: 15px; padding: 15px; background: #fff3cd; border-radius: 6px; border-left: 4px solid #ffc107;">
+          <h6 style="margin: 0 0 10px 0; color: #856404;">
+            <i class="fas fa-exclamation-triangle"></i> 오류 내역
+          </h6>
+          <div style="max-height: 150px; overflow-y: auto; font-size: 12px; color: #856404;">
+            ${errors.slice(0, 10).map(error => `<div>• ${error}</div>`).join('')}
+            ${errors.length > 10 ? `<div>... 외 ${errors.length - 10}개</div>` : ''}
+          </div>
+        </div>
+      `;
+    }
+    
+    resultContainer.innerHTML = resultHtml;
+    resultContainer.style.display = 'block';
+    
+    // 담당자 목록 새로고침
+    if (successCount > 0) {
+      await fetchManagers();
+    }
+    
+  } catch (error) {
+    console.error('엑셀 업로드 오류:', error);
+    progressText.textContent = '오류 발생';
+    resultContainer.innerHTML = `
+      <div style="padding: 15px; background: #f8d7da; border-radius: 6px; border-left: 4px solid #dc3545;">
+        <h6 style="margin: 0 0 10px 0; color: #721c24;">
+          <i class="fas fa-times-circle"></i> 업로드 실패
+        </h6>
+        <div style="color: #721c24; font-size: 14px;">
+          ${error.message || error}
+        </div>
+      </div>
+    `;
+    resultContainer.style.display = 'block';
+  }
+};
+
+// 엑셀 헤더에서 컬럼 매핑 찾기
+function findColumnMappings(headers) {
+  const mapping = {
+    managerName: null,
+    employeeNumber: null,
+    insuranceAccounts: {}
+  };
+  
+  headers.forEach((header, index) => {
+    if (!header) return;
+    
+    const headerStr = header.toString().toLowerCase().trim();
+    
+    // 담당자명(사원명) 찾기
+    if (headerStr.includes('사원명') || headerStr.includes('담당자명') || headerStr.includes('이름')) {
+      mapping.managerName = index;
+    }
+    
+    // 사원번호 찾기 (가이아 아이디로 사용)
+    if (headerStr.includes('사원번호')) {
+      mapping.employeeNumber = index;
+    }
+    
+    // 보험사 계정 정보 찾기
+    [...lifeInsuranceCompanies, ...nonLifeInsuranceCompanies].forEach(company => {
+      const companyName = company.name;
+      
+      if (headerStr.includes(companyName.toLowerCase())) {
+        if (!mapping.insuranceAccounts[company.key]) {
+          mapping.insuranceAccounts[company.key] = {};
+        }
+        
+        if (headerStr.includes('사원') || headerStr.includes('번호')) {
+          mapping.insuranceAccounts[company.key].employeeId = index;
+        } else if (headerStr.includes('비밀번호') || headerStr.includes('password')) {
+          mapping.insuranceAccounts[company.key].password = index;
+        }
+      }
+    });
+  });
+  
+  return mapping;
 }
 
  

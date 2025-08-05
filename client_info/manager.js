@@ -1,6 +1,16 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.8.0/firebase-app.js";
 import { getFirestore, collection, getDocs, query, where, doc, updateDoc, onSnapshot, orderBy } from "https://www.gstatic.com/firebasejs/11.8.0/firebase-firestore.js";
 import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/11.8.0/firebase-functions.js";
+import { 
+  lifeInsuranceCompanies, 
+  nonLifeInsuranceCompanies, 
+  insuranceCompanies, 
+  lifeCompanies, 
+  nonLifeCompanies,
+  getInsuranceCompanyKey,
+  getInsuranceCompanyName,
+  getInsuranceCompanyType
+} from "./insurance-companies.js";
 
 // Firebase 설정
 const firebaseConfig = {
@@ -27,44 +37,7 @@ let currentEditingClient = null;
 let isEditingClient = false;
 let isInitialPasswordUser = false; // 초기 비밀번호 사용자 여부
 
-// 보험사 목록 정의
-const lifeInsuranceCompanies = [
-  { name: 'ABL생명', key: 'abl' },
-  { name: '흥국생명', key: 'heungkuk_life' },
-  { name: '라이나생명', key: 'lina' },
-  { name: '동양생명', key: 'dongyang' },
-  { name: '미래에셋생명', key: 'mirae' },
-  { name: '처브라이프생명', key: 'chubb_life' },
-  { name: 'KB생명', key: 'kb_life' },
-  { name: 'KDB생명', key: 'kdb' },
-  { name: '삼성생명', key: 'samsung_life' },
-  { name: '농협생명', key: 'nh_life' },
-  { name: 'DGB생명', key: 'dgb' },
-  { name: '한화생명', key: 'hanwha_life' },
-  { name: '카디프생명', key: 'cardif' },
-  { name: '신한라이프', key: 'shinhan' },
-  { name: '오렌지라이프', key: 'orange' },
-  { name: '푸본현대생명', key: 'fubon' },
-  { name: '푸르덴셜생명', key: 'prudential' },
-  { name: '메트라이프생명', key: 'metlife' },
-  { name: '하나생명', key: 'hana_life' },
-  { name: '교보생명', key: 'kyobo' }
-];
-
-const nonLifeInsuranceCompanies = [
-  { name: '메리츠화재', key: 'meritz' },
-  { name: '한화손해', key: 'hanwha_nonlife' },
-  { name: '현대해상', key: 'hyundai' },
-  { name: 'DB손해', key: 'db' },
-  { name: '삼성화재', key: 'samsung_fire' },
-  { name: 'KB손해', key: 'kb_nonlife' },
-  { name: 'MG손해보험', key: 'mg' },
-  { name: '롯데손보', key: 'lotte' },
-  { name: '흥국화재', key: 'heungkuk_fire' },
-  { name: '농협손보', key: 'nh_nonlife' },
-  { name: '하나손해', key: 'hana_nonlife' },
-  { name: '처브손해', key: 'chubb_nonlife' }
-];
+// 보험사 목록은 insurance-companies.js 모듈에서 import됩니다
 
 // 로그인 함수
 window.login = async function() {
