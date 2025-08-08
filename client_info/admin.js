@@ -194,7 +194,9 @@ window.runMigration = async function() {
 };
 
 async function fetchManagers() {
-  const snapshot = await getDocs(fsCollection(db, 'managers'));
+  // createdAt 기준으로 정렬하여 조회
+  const q = query(fsCollection(db, 'managers'), orderBy('createdAt', 'asc'));
+  const snapshot = await getDocs(q);
   managers = snapshot.docs.map(doc => ({
     id: doc.id,
     ...doc.data() // 모든 필드를 포함
@@ -3370,6 +3372,8 @@ window.uploadExcelData = async function() {
         const insuranceAccounts = {};
         let hasInsuranceData = false;
         
+        console.log(`${managerName} 담당자 보험사 정보 처리 시작`);
+        
         // 생명보험사 처리
         lifeInsuranceCompanies.forEach(company => {
           const employeeIdCol = columnMapping.insuranceAccounts[company.key]?.employeeId;
@@ -3378,6 +3382,8 @@ window.uploadExcelData = async function() {
           if (employeeIdCol !== undefined || passwordCol !== undefined) {
             const employeeId = employeeIdCol !== undefined ? (row[employeeIdCol]?.toString().trim() || '') : '';
             const password = passwordCol !== undefined ? (row[passwordCol]?.toString().trim() || '') : '';
+            
+            console.log(`${company.name}: 사원번호=${employeeId}, 비밀번호=${password ? '***' : '없음'}`);
             
             if (employeeId || password) {
               insuranceAccounts[company.key] = { employeeId, password };
@@ -3395,6 +3401,8 @@ window.uploadExcelData = async function() {
             const employeeId = employeeIdCol !== undefined ? (row[employeeIdCol]?.toString().trim() || '') : '';
             const password = passwordCol !== undefined ? (row[passwordCol]?.toString().trim() || '') : '';
             
+            console.log(`${company.name}: 사원번호=${employeeId}, 비밀번호=${password ? '***' : '없음'}`);
+            
             if (employeeId || password) {
               insuranceAccounts[company.key] = { employeeId, password };
               hasInsuranceData = true;
@@ -3404,11 +3412,17 @@ window.uploadExcelData = async function() {
         
         if (hasInsuranceData) {
           updateData.insuranceAccounts = insuranceAccounts;
+          console.log(`${managerName}: 보험사 데이터 추가됨`, insuranceAccounts);
+        } else {
+          console.log(`${managerName}: 보험사 데이터 없음`);
         }
+        
+        console.log(`${managerName} 업데이트 데이터:`, updateData);
         
         // Firebase Functions를 통해 업데이트
         const updateManagerFunction = httpsCallable(functions, 'updateManagerInfo');
-        await updateManagerFunction(updateData);
+        const result = await updateManagerFunction(updateData);
+        console.log(`${managerName} 업데이트 결과:`, result);
         
         successCount++;
         
@@ -3485,6 +3499,8 @@ window.uploadExcelData = async function() {
 
 // 엑셀 헤더에서 컬럼 매핑 찾기
 function findColumnMappings(headers) {
+  console.log('엑셀 헤더들:', headers);
+  
   const mapping = {
     managerName: null,
     employeeNumber: null,
@@ -3495,35 +3511,60 @@ function findColumnMappings(headers) {
     if (!header) return;
     
     const headerStr = header.toString().toLowerCase().trim();
+    console.log(`헤더 ${index}: "${headerStr}"`);
     
     // 담당자명(사원명) 찾기
-    if (headerStr.includes('사원명') || headerStr.includes('담당자명') || headerStr.includes('이름')) {
+    if (headerStr.includes('사원명') || headerStr.includes('담당자명') || headerStr.includes('이름') || headerStr === '담당자') {
       mapping.managerName = index;
+      console.log(`담당자명 컬럼 찾음: ${index}`);
     }
     
     // 사원번호 찾기 (가이아 아이디로 사용)
-    if (headerStr.includes('사원번호')) {
+    if (headerStr.includes('사원번호') || headerStr.includes('직원번호') || headerStr === '번호') {
       mapping.employeeNumber = index;
+      console.log(`사원번호 컬럼 찾음: ${index}`);
     }
     
-    // 보험사 계정 정보 찾기
+    // 보험사 계정 정보 찾기 - 더 유연한 매칭
     [...lifeInsuranceCompanies, ...nonLifeInsuranceCompanies].forEach(company => {
-      const companyName = company.name;
+      const companyName = company.name.toLowerCase();
       
-      if (headerStr.includes(companyName.toLowerCase())) {
+      // 보험사 이름이 포함된 헤더 찾기
+      if (headerStr.includes(companyName) || 
+          headerStr.includes(companyName.replace('생명', '')) || 
+          headerStr.includes(companyName.replace('손해보험', '')) ||
+          headerStr.includes(companyName.replace('화재', '')) ||
+          headerStr.includes(companyName.replace('보험', ''))) {
+        
         if (!mapping.insuranceAccounts[company.key]) {
           mapping.insuranceAccounts[company.key] = {};
         }
         
-        if (headerStr.includes('사원') || headerStr.includes('번호')) {
+        console.log(`${company.name} 관련 컬럼 찾음: ${headerStr} (인덱스: ${index})`);
+        
+        // 사원번호/아이디 관련
+        if (headerStr.includes('사원') || headerStr.includes('직원') || 
+            headerStr.includes('번호') || headerStr.includes('id') || 
+            headerStr.includes('아이디') || headerStr.includes('계정')) {
           mapping.insuranceAccounts[company.key].employeeId = index;
-        } else if (headerStr.includes('비밀번호') || headerStr.includes('password')) {
+          console.log(`${company.name} 사원번호: ${index}`);
+        }
+        // 비밀번호 관련
+        else if (headerStr.includes('비밀번호') || headerStr.includes('password') || 
+                 headerStr.includes('패스워드') || headerStr.includes('pw')) {
           mapping.insuranceAccounts[company.key].password = index;
+          console.log(`${company.name} 비밀번호: ${index}`);
+        }
+        // 기본적으로 사원번호로 간주 (다른 키워드가 없으면)
+        else {
+          mapping.insuranceAccounts[company.key].employeeId = index;
+          console.log(`${company.name} 기본 사원번호로 설정: ${index}`);
         }
       }
     });
   });
   
+  console.log('최종 컬럼 매핑:', mapping);
   return mapping;
 }
 
