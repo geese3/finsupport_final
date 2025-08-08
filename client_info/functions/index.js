@@ -443,10 +443,21 @@ exports.updateManagerInfo = functions.https.onCall(async (data, context) => {
 
     // createdAt 보존 (순서 유지를 위해)
     if (cleanData.createdAt) {
-      // Firestore Timestamp로 변환 (필요한 경우)
-      if (typeof cleanData.createdAt === "object" && cleanData.createdAt.seconds) {
+      // 이미 Firestore Timestamp인 경우 그대로 유지
+      if (cleanData.createdAt._seconds !== undefined) {
+        // Firestore Timestamp 객체인 경우 그대로 사용
+        cleanData.createdAt = admin.firestore.Timestamp.fromDate(new Date(cleanData.createdAt._seconds * 1000));
+      } else if (typeof cleanData.createdAt === "object" && cleanData.createdAt.seconds) {
+        // 클라이언트에서 전송된 Timestamp 객체 형태
         cleanData.createdAt = admin.firestore.Timestamp.fromDate(new Date(cleanData.createdAt.seconds * 1000));
+      } else if (typeof cleanData.createdAt === "string") {
+        // ISO 문자열 형태인 경우
+        cleanData.createdAt = admin.firestore.Timestamp.fromDate(new Date(cleanData.createdAt));
+      } else if (cleanData.createdAt instanceof Date) {
+        // Date 객체인 경우
+        cleanData.createdAt = admin.firestore.Timestamp.fromDate(cleanData.createdAt);
       }
+      // 이미 admin.firestore.Timestamp 인스턴스인 경우 그대로 사용
     } else {
       // createdAt이 없는 경우 현재 시간으로 설정 (새 담당자)
       cleanData.createdAt = admin.firestore.FieldValue.serverTimestamp();

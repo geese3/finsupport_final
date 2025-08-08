@@ -3355,7 +3355,10 @@ window.uploadExcelData = async function() {
         const updateData = {
           managerId: manager.id,
           code: manager.code,
-          createdAt: manager.createdAt
+          createdAt: manager.createdAt ? {
+            seconds: manager.createdAt.seconds,
+            nanoseconds: manager.createdAt.nanoseconds
+          } : null
         };
         
         // 가이아 아이디 처리 (사원번호를 가이아 아이디로 사용)
