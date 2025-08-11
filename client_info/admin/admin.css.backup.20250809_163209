@@ -1,0 +1,1494 @@
+.admin-container {
+  max-width: 600px;
+  margin: 40px auto;
+  padding: 24px;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 0 10px #0001;
+}
+.admin-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.search-area {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 24px;
+  margin-top: 36px;
+  gap: 8px;
+}
+#searchInput {
+  width: 100%;
+  max-width: 400px;
+  padding: 10px;
+  font-size: 16px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+.search-reset-btn {
+  background: #eee;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 0 10px;
+  height: 40px;
+  margin-left: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, border-color 0.2s;
+}
+.search-reset-btn svg {
+  display: block;
+}
+.search-reset-btn:active {
+  background: #d0e6f7;
+  border-color: #3498db;
+}
+.card-list, #cardList {
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-sizing: border-box;
+  padding: 16px;
+}
+.client-card {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  background: #f5f8fa;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px #0001;
+  padding: 18px 20px;
+  cursor: pointer;
+  transition: box-shadow 0.2s;
+}
+.client-card:hover {
+  box-shadow: 0 4px 16px #0002;
+  background: #eaf6ff;
+}
+.client-card .name {
+  font-weight: bold;
+  font-size: 18px;
+  margin-bottom: 6px;
+}
+.client-card .phone {
+  color: #3498db;
+  font-size: 15px;
+}
+/* 어드민 페이지에서만 적용되는 모달 스타일 */
+.admin-page .modal {
+  display: none;
+  position: fixed;
+  z-index: 1000;
+  left: 0;
+  top: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.4);
+  align-items: center;
+  justify-content: center;
+}
+.admin-page .modal-content {
+  background: #fff;
+  border-radius: 10px;
+  padding: 32px 24px;
+  max-width: 400px;
+  margin: 80px auto;
+  position: relative;
+  overflow-y: auto;
+  max-height: 70vh;
+  transition: none !important;
+}
+
+/* 전체 수정 모달용 레이아웃 */
+.admin-page .modal-content.edit-modal {
+  background: #fff;
+  border-radius: 10px;
+  padding: 0;
+  max-width: 600px;
+  width: 90vw;
+  margin: 40px auto;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  transition: none !important;
+}
+
+/* 일반 보기 모달도 동일한 레이아웃 */
+.admin-page .modal-content.view-modal {
+  background: #fff;
+  border-radius: 10px;
+  padding: 0;
+  max-width: 600px;
+  width: 90vw;
+  margin: 40px auto;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  transition: none !important;
+}
+
+/* 고객정보조회 모달용 레이아웃 (기본적으로 view-modal과 동일) */
+.admin-page .modal-content.client-modal {
+  background: #fff;
+  border-radius: 10px;
+  padding: 0;
+  max-width: 600px;
+  width: 90vw;
+  margin: 40px auto;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  transition: none !important;
+}
+
+/* 개별 수정 모달 (팀, 직급, 전화번호, 가이아 비밀번호 등) - 기존 크기 유지 */
+.admin-page .modal-content.field-modal {
+  background: #fff !important;
+  border-radius: 10px !important;
+  padding: 32px 24px !important;
+  max-width: 450px !important;
+  width: auto !important;
+  margin: 80px auto !important;
+  max-height: 70vh !important;
+  overflow-y: auto !important;
+  display: block !important;
+  flex-direction: initial !important;
+  position: relative !important;
+  transition: none !important;
+}
+
+/* 개별 수정 모달 내부 입력 필드 크기 조정 */
+.admin-page .modal-content.field-modal input[id="field-modal-input"],
+.admin-page .modal-content.field-modal select[id="field-modal-input"] {
+  max-width: 350px !important;
+}
+
+/* 전체 수정 모달의 섹션들 */
+.admin-page .modal-content.edit-modal .modal-header {
+  padding: 24px 32px 16px 32px;
+  border-bottom: 1px solid #ddd;
+  flex-shrink: 0;
+  background: #fff;
+}
+
+.admin-page .modal-content.edit-modal .modal-body {
+  padding: 20px 32px;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 200px;
+  max-height: calc(85vh - 140px);
+}
+
+.admin-page .modal-content.edit-modal .modal-footer {
+  padding: 16px 32px 24px 32px;
+  border-top: 1px solid #ddd;
+  flex-shrink: 0;
+  background: #fff;
+}
+
+/* 일반 보기 모달의 섹션들 */
+.admin-page .modal-content.view-modal .modal-header {
+  padding: 24px 32px 16px 32px;
+  border-bottom: 1px solid #ddd;
+  flex-shrink: 0;
+  background: #fff;
+}
+
+.admin-page .modal-content.view-modal .modal-body {
+  padding: 20px 32px;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 200px;
+  max-height: calc(85vh - 140px);
+}
+
+.admin-page .modal-content.view-modal .modal-footer {
+  padding: 16px 32px 24px 32px;
+  border-top: 1px solid #ddd;
+  flex-shrink: 0;
+  background: #fff;
+}
+
+/* 일반 모달은 기존 스타일 유지 */
+.admin-page .modal-header {
+  padding: 24px 32px 16px 32px;
+  border-bottom: 1px solid #ddd;
+  flex-shrink: 0;
+}
+
+.admin-page .modal-body {
+  padding: 20px 32px;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.admin-page .modal-footer {
+  padding: 16px 32px 24px 32px;
+  border-top: 1px solid #ddd;
+  flex-shrink: 0;
+  background: #fff;
+}
+.admin-page .close {
+  position: absolute;
+  right: 18px;
+  top: 12px;
+  font-size: 28px;
+  color: #888;
+  cursor: pointer;
+}
+.close:hover {
+  color: #222;
+}
+#login-form {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: #f5f5f5;
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  z-index: 1000;
+}
+body.login-mode #login-form {
+  display: flex !important;
+}
+.input-group {
+  border: 1px solid #cfd8dc;
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 18px;
+  background: #fafbfc;
+}
+.input-group input {
+  width: 100%;
+  border: none;
+  outline: none;
+  padding: 18px 16px;
+  font-size: 17px;
+  background: #fafbfc;
+  color: #222;
+  box-sizing: border-box;
+}
+.input-group input + input {
+  border-top: 1px solid #cfd8dc;
+}
+#login-btn {
+  width: 100%;
+  background: #0a3d69;
+  color: #fff;
+  font-size: 20px;
+  border: none;
+  border-radius: 12px;
+  padding: 16px 0;
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+#login-btn:active {
+  background: #7b8a99;
+}
+#logout-btn, #admin-content button[onclick="logout()"] {
+  width: 100%;
+  max-width: 400px;
+  margin: 32px auto 0 auto;
+  display: block;
+  background: #fff;
+  color: #0a3d69;
+  border: 2px solid #0a3d69;
+  border-radius: 12px;
+  font-size: 18px;
+  font-weight: bold;
+  padding: 14px 0;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+#logout-btn:hover, #admin-content button[onclick="logout()"]:hover {
+  background: #0a3d69;
+  color: #fff;
+}
+
+/* 로그인 컨테이너 스타일 */
+.login-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background-color: #f5f5f5;
+}
+
+.login-box {
+  background: #fff;
+  padding: 2rem 2rem 1.5rem 2rem;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px #0001;
+  width: 100%;
+  max-width: 400px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.login-box .logo-area {
+  margin-bottom: 24px;
+}
+
+.login-box h2 {
+    text-align: center;
+    margin-bottom: 1.5rem;
+    color: #333;
+}
+
+.login-box .form-group {
+    margin-bottom: 1rem;
+}
+
+.login-box label {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: #666;
+}
+
+.login-box input {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 1rem;
+}
+
+.login-box button {
+    width: 100%;
+    padding: 0.75rem;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 1rem;
+    cursor: pointer;
+    margin-top: 1rem;
+}
+
+.login-box button:hover {
+    background-color: #45a049;
+}
+
+.error-message {
+    color: #dc3545;
+    margin-top: 1rem;
+    text-align: center;
+}
+
+/* 담당자 관리 섹션 스타일 */
+.manager-section {
+  background: #fff;
+  padding: 20px;
+  border-radius: 8px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.manager-section h4 {
+  margin: 0 0 16px 0;
+  color: #333;
+}
+
+.manager-input-group {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.manager-input-group input {
+  flex: 1;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.manager-input-group button {
+  padding: 8px 16px;
+  background: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.manager-input-group button:hover {
+  background: #45a049;
+}
+
+/* 담당자 폼 섹션 스타일 */
+.manager-form-section {
+  background: #f8f9fa;
+  padding: 16px;
+  border-radius: 6px;
+  margin-bottom: 16px;
+  border: 1px solid #e9ecef;
+}
+
+.manager-form-section h5 {
+  margin: 0 0 12px 0;
+  color: #495057;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.manager-input-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+  align-items: center;
+}
+
+.manager-input-row:last-child {
+  margin-bottom: 0;
+}
+
+.manager-input-row input, .manager-input-row select {
+  flex: 1;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.manager-input-row span {
+  color: #666;
+  font-weight: bold;
+}
+
+.manager-input-group {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.manager-input-group button {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+#addManagerBtn {
+  background: #4CAF50;
+  color: white;
+}
+
+#addManagerBtn:hover {
+  background: #45a049;
+}
+
+#resetManagerFormBtn {
+  background: #6c757d;
+  color: white;
+}
+
+#resetManagerFormBtn:hover {
+  background: #5a6268;
+}
+
+.manager-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.manager-item {
+  background: #f5f5f5;
+  padding: 8px 12px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.manager-item button {
+  background: none;
+  border: none;
+  color: #dc3545;
+  cursor: pointer;
+  padding: 0;
+  font-size: 16px;
+}
+
+.manager-item button:hover {
+  color: #c82333;
+}
+
+/* 어드민 레이아웃 및 사이드바 스타일 */
+.admin-flex {
+  display: flex;
+  min-height: 100vh;
+  background: #f5f5f5;
+}
+.sidebar {
+  width: 220px;
+  background: #fff;
+  color: #0a3d69;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 32px 0 0 0;
+  height: 100vh;
+  position: sticky;
+  top: 0;
+}
+.sidebar-logo {
+  width: 100%;
+  text-align: center;
+  margin-bottom: 32px;
+}
+.sidebar-logo img {
+  display: inline-block;
+}
+.sidebar-menu {
+  list-style: none;
+  padding: 0;
+  width: 100%;
+}
+.sidebar-menu li {
+  padding: 18px 0 18px 32px;
+  font-size: 18px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  color: #0a3d69;
+}
+.sidebar-menu li.active, .sidebar-menu li:hover {
+  background: #0a3d69;
+  color: #fff;
+  font-weight: bold;
+}
+.sidebar-menu li.active .sidebar-icon svg,
+.sidebar-menu li:hover .sidebar-icon svg {
+  fill: #fff !important;
+}
+.main-content {
+  flex: 1;
+  padding: 48px 32px 32px 32px;
+  min-width: 0;
+}
+
+/* 담당자 관리/고객정보 영역 구분 */
+#manager-section, #client-section {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 0 10px #0001;
+  padding: 32px 24px;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+@media (max-width: 900px) {
+  .admin-flex {
+    flex-direction: column;
+  }
+  .sidebar {
+    position: fixed;
+    left: -220px;
+    top: 0;
+    width: 220px;
+    height: 100vh;
+    z-index: 2000;
+    background: #fff;
+    box-shadow: 2px 0 8px #0002;
+    transition: left 0.3s;
+    padding-top: 60px;
+  }
+  .sidebar.open {
+    left: 0;
+  }
+  .main-content {
+    padding: 24px 4vw;
+    min-width: 0;
+  }
+  .sidebar-menu li {
+    font-size: 16px;
+    padding: 16px 16px;
+  }
+  .sidebar-text {
+    display: none;
+  }
+  .sidebar-icon {
+    margin-right: 0;
+    display: inline-block;
+  }
+  .sidebar-toggle {
+    display: block !important;
+  }
+  .sidebar.open .sidebar-text {
+    display: inline;
+  }
+}
+
+#sidebar-logout-btn {
+  margin-top: 100%;
+  margin-bottom: 32px;
+  width: 80%;
+  background: #fff;
+  color: #0a3d69;
+  border: 2px solid #0a3d69;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: bold;
+  padding: 12px 0;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  display: block;
+}
+#sidebar-logout-btn:hover {
+  background: #0a3d69;
+  color: #fff;
+}
+
+/* 로그인 폼이 보일 때 사이드바/메인콘텐츠 숨김 */
+body.login-mode #sidebar,
+body.login-mode #main-content {
+  display: none !important;
+}
+
+.admin-page .modal-btn {
+  padding: 8px 20px;
+  border-radius: 6px;
+  border: none;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  margin-left: 4px;
+  margin-right: 4px;
+  background: #eee;
+  color: #333;
+  transition: background 0.2s, color 0.2s;
+}
+.admin-page .modal-btn.blue {
+  background: #3498db;
+  color: #fff;
+}
+.admin-page .modal-btn.blue:hover {
+  background: #217dbb;
+}
+.admin-page .modal-btn.red {
+  background: #dc3545;
+  color: #fff;
+}
+.admin-page .modal-btn.red:hover {
+  background: #b52a37;
+}
+
+.sidebar-toggle {
+  display: none;
+  position: fixed;
+  top: 18px;
+  left: 18px;
+  z-index: 3000;
+  background: #fff;
+  border: none;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px #0001;
+  padding: 2px 4px;
+  cursor: pointer;
+}
+.sidebar-toggle svg {
+  width: 22px !important;
+  height: 22px !important;
+  display: block;
+}
+@media (max-width: 900px) {
+  .sidebar-toggle {
+    display: block !important;
+  }
+}
+body.login-mode .sidebar-toggle {
+  display: none !important;
+}
+
+/* 모달창 열릴 때 배경 스크롤 방지 */
+.admin-page.modal-open {
+  overflow: hidden;
+  position: fixed;
+  width: 100%;
+}
+.sidebar-icon {
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 10px;
+}
+.sidebar-text {
+  vertical-align: middle;
+}
+
+@media (max-width: 600px) {
+  .card-list, #cardList {
+    max-width: 100vw;
+    width: 100%;
+    padding: 8px;
+    box-sizing: border-box;
+  }
+  .client-card {
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
+    padding: 12px 8px;
+    font-size: 15px;
+  }
+  .login-box {
+    max-width: 95vw;
+    width: 100%;
+    padding: 1.2rem 0.7rem 1rem 0.7rem;
+    box-sizing: border-box;
+  }
+  .input-group input {
+    font-size: 15px;
+    padding: 12px 10px;
+  }
+  #login-btn {
+    font-size: 17px;
+    padding: 12px 0;
+  }
+  
+  /* 개별 핸드폰번호 수정 모달 내부 입력란 모바일 */
+  #field-modal-phone1,
+  #field-modal-phone2,
+  #field-modal-phone3 {
+    flex: 1 !important;
+    min-width: 0 !important;
+    width: auto !important;
+    padding: 8px !important;
+    font-size: 14px !important;
+  }
+  
+  /* 편집 모드 모바일 반응형 */
+  .editClientInfoTitle,
+  .editClientInfoTitleSec {
+    display: block;
+    width: 100%;
+    margin-bottom: 5px;
+    font-weight: bold;
+  }
+  
+  .editClientInfoInput,
+  .editClientInfoInputSec {
+    width: 100%;
+    margin-bottom: 10px;
+  }
+  
+  /* 핸드폰번호 입력란 모바일 - 3개가 한 줄에 확실히 들어가게 더 작은 너비 */
+  .editClientInfoInputPhone.first,
+  .editClientInfoInputPhone.middle,
+  .editClientInfoInputPhone.last {
+    display: inline-block;
+    vertical-align: top;
+    box-sizing: border-box;
+    font-size: 14px;
+    padding: 6px 4px;
+  }
+  
+  .editClientInfoInputPhone.first {
+    width: 26%; /* 010용 - 3자리 */
+    margin-right: 1%;
+  }
+  
+  .editClientInfoInputPhone.middle {
+    width: 32%; /* 1234용 - 4자리 */
+    margin-right: 1%;
+  }
+  
+  .editClientInfoInputPhone.last {
+    width: 32%; /* 5678용 - 4자리 */
+    margin-right: 0;
+  }
+  
+  /* 주민등록번호 입력란 모바일 - 2개가 한 줄에 확실히 들어가게 더 작은 너비 */
+  .editClientInfoInputSSN.front,
+  .editClientInfoInputSSN.back {
+    display: inline-block;
+    vertical-align: top;
+    box-sizing: border-box;
+    font-size: 14px;
+    padding: 6px 4px;
+  }
+  
+  .editClientInfoInputSSN.front {
+    width: 46%; /* 123456용 - 6자리 */
+    margin-right: 2%;
+  }
+  
+  .editClientInfoInputSSN.back {
+    width: 52%; /* 1234567용 - 7자리 */
+  }
+  
+  /* 전체 수정창 보험사 관련 모바일 대응 */
+  .admin-page .modal-content {
+    max-width: 95vw !important;
+    width: 95vw !important;
+    margin: 10px auto !important;
+    max-height: 90vh !important;
+  }
+  
+  /* 전체 수정 모달 모바일 */
+  .admin-page .modal-content.edit-modal {
+    margin: 10px auto !important;
+    max-height: 90vh !important;
+  }
+  
+  .admin-page .modal-content.edit-modal .modal-header {
+    padding: 20px 20px 15px 20px !important;
+  }
+  
+  .admin-page .modal-content.edit-modal .modal-body {
+    padding: 20px !important;
+  }
+  
+  .admin-page .modal-content.edit-modal .modal-footer {
+    padding: 15px 20px 20px 20px !important;
+  }
+  
+  /* 일반 보기 모달 모바일 */
+  .admin-page .modal-content.view-modal {
+    margin: 10px auto !important;
+    max-height: 90vh !important;
+  }
+  
+  .admin-page .modal-content.view-modal .modal-header {
+    padding: 20px 20px 15px 20px !important;
+  }
+  
+  .admin-page .modal-content.view-modal .modal-body {
+    padding: 20px !important;
+  }
+  
+  .admin-page .modal-content.view-modal .modal-footer {
+    padding: 15px 20px 20px 20px !important;
+  }
+  
+  /* 개별 수정 모달 모바일 */
+  .admin-page .modal-content.field-modal {
+    max-width: 95vw !important;
+    width: 95vw !important;
+    margin: 20px auto !important;
+    padding: 24px 20px !important;
+  }
+  
+  /* 개별 수정 모달 내부 입력 필드 모바일 */
+  .admin-page .modal-content.field-modal input,
+  .admin-page .modal-content.field-modal select {
+    max-width: none !important;
+  }
+  
+  /* 보험사 입력 필드 모바일 */
+  div[style*="display:flex"][style*="align-items:center"][style*="margin-bottom:10px"] {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 5px !important;
+  }
+  
+  div[style*="display:flex"][style*="align-items:center"][style*="margin-bottom:10px"] label {
+    width: 100% !important;
+    margin-bottom: 5px !important;
+    font-weight: bold !important;
+  }
+  
+  div[style*="display:flex"][style*="align-items:center"][style*="margin-bottom:10px"] input {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    margin-right: 0 !important;
+  }
+  
+  /* 그리드 레이아웃을 모바일에서 단일 컬럼으로 */
+  div[style*="display:grid"][style*="grid-template-columns:repeat(2,1fr)"] {
+    display: block !important;
+    grid-template-columns: none !important;
+  }
+  
+  div[style*="display:grid"][style*="grid-template-columns:repeat(2,1fr)"] label {
+    display: block !important;
+    width: 100% !important;
+    margin-bottom: 8px !important;
+  }
+  
+  /* 전체 수정창 일관성 있는 레이아웃 - 모든 라벨을 위에, 입력란을 아래에 */
+  div[style*="margin-bottom:20px"] .editClientInfoTitle {
+    display: block !important;
+    width: 100% !important;
+    margin-bottom: 5px !important;
+    font-weight: bold !important;
+  }
+  
+  /* 핸드폰번호와 주민번호는 입력란들만 한 줄에 배치 */
+  div[style*="margin-bottom:20px"] .editClientInfoInputPhone {
+    display: inline-block !important;
+    vertical-align: top !important;
+  }
+  
+  div[style*="margin-bottom:20px"] .editClientInfoInputSSN {
+    display: inline-block !important;
+    vertical-align: top !important;
+  }
+  
+  /* 비고 textarea도 라벨 아래 배치 */
+  div[style*="margin-bottom:20px"] .editClientInfoTitle + textarea {
+    display: block !important;
+    width: 100% !important;
+    margin-top: 5px !important;
+  }
+  
+  /* 모바일에서는 콜론과 하이픈 모두 표시 - 일관성을 위해 */
+  /* 모든 텍스트 요소 정상 표시 */
+  div[style*="margin-bottom:20px"] .editClientInfoTitle,
+  div[style*="margin-bottom:20px"] .editClientInfoTitleSec,
+  div[style*="margin-bottom:20px"] .editClientInfoInput,
+  div[style*="margin-bottom:20px"] .editClientInfoInputSec,
+  div[style*="margin-bottom:20px"] .editClientInfoInputPhone,
+  div[style*="margin-bottom:20px"] .editClientInfoInputSSN,
+  div[style*="margin-bottom:20px"] textarea,
+  div[style*="margin-bottom:20px"] select {
+    font-size: 16px !important;
+  }
+}
+
+/* 매우 작은 화면을 위한 추가 스타일 */
+@media (max-width: 400px) {
+  /* 전체 수정창에서 모든 라벨과 입력을 세로로 배치 */
+  .editClientInfoTitle,
+  .editClientInfoTitleSec {
+    display: block !important;
+    width: 100% !important;
+    margin-bottom: 5px !important;
+  }
+  
+  .editClientInfoInput,
+  .editClientInfoInputSec {
+    width: 100% !important;
+    margin-bottom: 10px !important;
+  }
+  
+  /* 400px 이하 매우 작은 화면에서 입력란 너비 더욱 최적화 */
+  
+  /* 핸드폰번호 3개 입력란 - 더 작게 조정 */
+  .editClientInfoInputPhone.first {
+    width: 24% !important;
+    margin-right: 1% !important;
+    font-size: 13px !important;
+    padding: 5px 3px !important;
+  }
+  
+  .editClientInfoInputPhone.middle,
+  .editClientInfoInputPhone.last {
+    width: 30% !important;
+    margin-right: 1% !important;
+    font-size: 13px !important;
+    padding: 5px 3px !important;
+  }
+  
+  .editClientInfoInputPhone.last {
+    margin-right: 0 !important;
+  }
+  
+  /* 주민등록번호 2개 입력란 - 더 작게 조정 */
+  .editClientInfoInputSSN.front {
+    width: 40% !important;
+    margin-right: 2% !important;
+    font-size: 13px !important;
+    padding: 5px 3px !important;
+  }
+  
+  .editClientInfoInputSSN.back {
+    width: 50% !important;
+    margin-right: 0 !important;
+    font-size: 13px !important;
+    padding: 5px 3px !important;
+  }
+  
+  /* 비고 textarea */
+  div[style*="margin-bottom:20px"] .editClientInfoTitle + textarea {
+    width: 100% !important;
+    margin-top: 5px !important;
+  }
+  
+  /* 400px 이하에서도 하이픈(-) 표시 유지 */
+  div[style*="margin-bottom:20px"] span {
+    font-size: 16px !important;
+    display: inline !important;
+  }
+}
+
+.search-guide {
+  text-align: center;
+  color: #888;
+  font-size: 16px;
+  margin: 24px 0;
+}
+
+@media (max-width: 700px) {
+  .admin-page .modal-content {
+    max-width: 98vw !important;
+    width: 98vw !important;
+    min-width: 0 !important;
+    box-sizing: border-box;
+    margin: 10px auto !important;
+    max-height: 90vh !important;
+  }
+  
+  /* 전체 수정 모달 700px 이하 */
+  .admin-page .modal-content.edit-modal {
+    margin: 10px auto !important;
+    max-height: 90vh !important;
+  }
+  
+  .admin-page .modal-content.edit-modal .modal-header {
+    padding: 20px 24px 15px 24px !important;
+  }
+  
+  .admin-page .modal-content.edit-modal .modal-body {
+    padding: 20px 24px !important;
+  }
+  
+  .admin-page .modal-content.edit-modal .modal-footer {
+    padding: 15px 24px 20px 24px !important;
+  }
+  
+  /* 일반 보기 모달 700px 이하 */
+  .admin-page .modal-content.view-modal {
+    margin: 10px auto !important;
+    max-height: 90vh !important;
+  }
+  
+  .admin-page .modal-content.view-modal .modal-header {
+    padding: 20px 24px 15px 24px !important;
+  }
+  
+  .admin-page .modal-content.view-modal .modal-body {
+    padding: 20px 24px !important;
+  }
+  
+  .admin-page .modal-content.view-modal .modal-footer {
+    padding: 15px 24px 20px 24px !important;
+  }
+  
+  /* 개별 수정 모달 700px 이하 */
+  .admin-page .modal-content.field-modal {
+    max-width: 98vw !important;
+    width: 98vw !important;
+    margin: 15px auto !important;
+    padding: 24px !important;
+  }
+  
+  /* 개별 수정 모달 내부 입력 필드 700px 이하 */
+  .admin-page .modal-content.field-modal input,
+  .admin-page .modal-content.field-modal select {
+    max-width: none !important;
+  }
+}
+
+.editClientInfoTitle {
+  display: inline-block;
+  width: 25%;
+}
+
+.editClientInfoTitleSec {
+  display: inline-block;
+  width: 12%;
+}
+
+.editClientInfoInput {
+  width: 70%;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  height: 30px;
+}
+
+.editClientInfoInputSec {
+  width: 30%;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  height: 30px;
+  text-align: center;
+}
+
+.editClientInfoInputNo {
+  width: 20%;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  height: 30px;
+  text-align: center;
+}
+
+/* 주민등록번호 입력란 (6자리-7자리) */
+.editClientInfoInputSSN {
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  height: 30px;
+  text-align: center;
+}
+
+.editClientInfoInputSSN.front {
+  width: 22%; /* 6자리용 */
+}
+
+.editClientInfoInputSSN.back {
+  width: 25%; /* 7자리용 */
+}
+
+/* 핸드폰번호 입력란 (3자리-4자리-4자리) */
+.editClientInfoInputPhone {
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  height: 30px;
+  text-align: center;
+}
+
+.editClientInfoInputPhone.first {
+  width: 18%; /* 3자리용 (010) */
+}
+
+.editClientInfoInputPhone.middle,
+.editClientInfoInputPhone.last {
+  width: 20%; /* 4자리용 */
+}
+
+.client-attachments {
+  margin-bottom: 10px;
+}
+.client-attachments a {
+  color: #3498db;
+  text-decoration: underline;
+  margin-right: 8px;
+  font-size: 15px;
+  word-break: break-all;
+}
+.client-attachments a:hover {
+  color: #217dbb;
+  text-decoration: underline;
+}
+
+/* 담당자 카드 스타일 */
+.manager-card {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  background: #f8f9fa;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px #0001;
+  padding: 18px 20px;
+  cursor: pointer;
+  transition: box-shadow 0.2s, background 0.2s;
+  border-left: 4px solid #3498db;
+}
+
+.manager-card:hover {
+  box-shadow: 0 4px 16px #0002;
+  background: #e8f4fd;
+}
+
+.manager-card .name {
+  font-weight: bold;
+  font-size: 18px;
+  margin-bottom: 8px;
+  color: #2c3e50;
+}
+
+.manager-card .manager-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.manager-card .team-role {
+  font-size: 15px;
+  color: #3498db !important;
+}
+
+.manager-card .client-count {
+  font-size: 14px;
+  color: #27ae60 !important;
+  font-weight: 500;
+}
+
+/* 담당자 정보 조회 섹션 스타일 */
+#manager-info-section {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 0 10px #0001;
+  padding: 32px 24px;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+#manager-info-section h3 {
+  color: #2c3e50;
+  margin-bottom: 20px;
+}
+
+#managerSearchInput {
+  width: 100%;
+  max-width: 400px;
+  padding: 10px;
+  font-size: 16px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+
+#managerCardList {
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-sizing: border-box;
+  padding: 16px;
+}
+
+/* 모바일 반응형 - 담당자 카드 */
+@media (max-width: 600px) {
+  .manager-card {
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
+    padding: 12px 8px;
+    font-size: 15px;
+  }
+  
+  .manager-card .name {
+    font-size: 16px;
+  }
+  
+  .manager-card .team-role {
+    font-size: 14px;
+  }
+  
+  .manager-card .client-count {
+    font-size: 13px;
+  }
+  
+  #managerCardList {
+    max-width: 100vw;
+    width: 100%;
+    padding: 8px;
+    box-sizing: border-box;
+  }
+}
+
+/* 고객 정보 수정 폼 기본 스타일 */
+.phone-input-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.company-phone-input-container {
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.postcode-input-container {
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.phone-inputs-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.postcode-inputs-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.postcode-input {
+  flex: 1;
+}
+
+.postcode-search-btn {
+  padding: 8px 12px;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.phone-separator {
+  font-weight: bold;
+  color: #666;
+}
+
+/* 모바일 반응형 - 고객 정보 수정 폼 */
+@media (max-width: 768px) {
+  /* 핸드폰번호 입력 필드를 세로 배치 */
+  .phone-input-container {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+  }
+  
+  /* 회사전화번호 입력 필드를 세로 배치 */
+  .company-phone-input-container {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+  }
+  
+  /* 우편번호 입력 필드를 세로 배치 */
+  .postcode-input-container {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+  }
+  
+  /* 우편번호 검색 버튼과 입력란 컨테이너 */
+  .postcode-inputs-group {
+    width: 100% !important;
+  }
+  
+  /* 전화번호 입력란들의 컨테이너는 가로 유지 */
+  .phone-inputs-group {
+    flex-direction: row !important;
+    justify-content: flex-start !important;
+  }
+}
+
+@media (max-width: 480px) {
+  /* 모바일에서도 전화번호 입력란들은 가로 유지 */
+  .phone-inputs-group {
+    flex-direction: row !important;
+    gap: 4px !important;
+    align-items: center !important;
+  }
+  
+  .phone-separator {
+    display: inline !important;
+  }
+  
+  .editClientInfoInputPhone {
+    flex: 1;
+    min-width: 60px;
+  }
+  
+  /* 우편번호 입력란과 검색버튼도 가로 유지 */
+  .postcode-inputs-group {
+    flex-direction: row !important;
+    gap: 8px !important;
+  }
+  
+  .postcode-input {
+    flex: 1;
+  }
+  
+  .postcode-search-btn {
+    flex-shrink: 0;
+  }
+}
+
+/* 더보기 버튼 스타일 */
+.load-more-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 30px 0;
+  padding: 20px 0;
+  text-align: center;
+}
+
+.load-more-btn {
+  background: #3498db;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(52, 152, 219, 0.2);
+}
+
+.load-more-btn:hover {
+  background: #2980b9;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(52, 152, 219, 0.3);
+}
+
+.load-more-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(52, 152, 219, 0.2);
+}
+
+.load-more-btn:disabled {
+  background: #bdc3c7;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* 모바일에서 더보기 버튼 스타일 조정 */
+@media (max-width: 768px) {
+  .load-more-btn {
+    font-size: 14px;
+    padding: 10px 20px;
+  }
+}
+
+/* 지역 선택 버튼 스타일 */
+.region-btn {
+  transition: all 0.3s ease;
+}
+
+.region-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3) !important;
+}
+
+.region-btn:active {
+  transform: translateY(0);
+}
+
+.region-btn.active:hover {
+  background: #5a67d8 !important;
+}
+
+.region-btn:not(.active):hover {
+  background: #f7fafc !important;
+  border-color: #5a67d8 !important;
+}
+
+/* 모바일에서 지역 버튼 반응형 */
+@media (max-width: 768px) {
+  .region-btn {
+    font-size: 13px;
+    padding: 6px 12px;
+    margin: 2px;
+  }
+}
+

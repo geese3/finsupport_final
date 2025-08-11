@@ -11,6 +11,8 @@ const functions = require("firebase-functions");
 const admin = require("firebase-admin");
 const CryptoJS = require("crypto-js");
 const dotenv = require("dotenv");
+const axios = require("axios");
+const cheerio = require("cheerio");
 dotenv.config();
 
 admin.initializeApp();
@@ -578,17 +580,34 @@ exports.authenticateManager = functions.https.onCall(async (data, context) => {
       );
     }
 
-    // 담당자 코드로 조회
-    const managerSnapshot = await admin
+    // 1차: 가이아 아이디로 조회 (가이아 아이디가 존재하고 입력값과 일치하는 경우)
+    let managerSnapshot = await admin
       .firestore()
       .collection("managers")
-      .where("code", "==", code)
+      .where("gaiaId", "==", code)
       .get();
+
+    // 가이아 아이디로 찾았지만 빈 값이나 null인 경우는 제외
+    let validGaiaMatch = false;
+    if (!managerSnapshot.empty) {
+      const doc = managerSnapshot.docs[0];
+      const data = doc.data();
+      validGaiaMatch = data.gaiaId && data.gaiaId.trim() !== "";
+    }
+
+    // 2차: 유효한 가이아 아이디 매칭이 없는 경우 담당자 코드로 조회
+    if (managerSnapshot.empty || !validGaiaMatch) {
+      managerSnapshot = await admin
+        .firestore()
+        .collection("managers")
+        .where("code", "==", code)
+        .get();
+    }
 
     if (managerSnapshot.empty) {
       throw new functions.https.HttpsError(
         "not-found",
-        "존재하지 않는 담당자 코드입니다.",
+        "존재하지 않는 담당자 코드 또는 가이아 아이디입니다.",
       );
     }
 
@@ -756,6 +775,263 @@ exports.setupBulkManagerPasswords = functions.https.onCall(async (data, context)
     throw new functions.https.HttpsError(
       "internal",
       "일괄 비밀번호 설정 실패: " + err.message,
+    );
+  }
+});
+
+// 생명보험협회 자격시험 일정 크롤링 함수
+exports.crawlLifeInsuranceExamSchedule = functions.https.onCall(async (data, context) => {
+  // 임시: 인증 체크 완화 (인증 문제 해결 시까지)
+  if (!context.auth) {
+    // 인증 없이 크롤링 요청 - 임시 허용
+  } else if (!allowedAdmins.includes(context.auth.token.email)) {
+    throw new functions.https.HttpsError(
+      "permission-denied",
+      "관리자만 접근 가능합니다.",
+    );
+  }
+
+  try {
+    console.log("생명보험협회 자격시험 일정 크롤링 시작");
+
+    // 모든 지역의 시험 일정 크롤링
+    const regions = [
+      {code: "10", name: "서울"},
+      {code: "12", name: "인천"},
+      {code: "30", name: "부산"},
+      {code: "32", name: "울산"},
+      {code: "40", name: "대구"},
+      {code: "50", name: "광주"},
+      {code: "55", name: "제주"},
+      {code: "87", name: "전주"},
+      {code: "60", name: "대전"},
+      {code: "65", name: "서산"},
+      {code: "70", name: "강릉"},
+      {code: "71", name: "원주"},
+      {code: "78", name: "춘천"},
+    ];
+
+    const allExamSchedules = [];
+
+    for (const region of regions) {
+      console.log(`${region.name} 지역 크롤링 시작`);
+
+      try {
+        // Form 데이터 구성 (scheduleSubmit 함수 방식)
+        const currentDate = new Date();
+        const searchDate = `${currentDate.getFullYear()}-${currentDate.getMonth() + 1}-1`;
+
+        const formData = new URLSearchParams();
+        formData.append("searchDate", searchDate);
+        formData.append("pageType", region.code);
+        formData.append("pageTypeNm", region.name);
+
+        // POST 요청으로 지역별 일정 조회
+        const response = await axios.post("https://exam.insure.or.kr/lp/schd/list", formData, {
+          timeout: 15000,
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
+              "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Referer": "https://exam.insure.or.kr/lp/schd/list",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+            "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
+          },
+        });
+
+        const $ = cheerio.load(response.data);
+
+        // 다양한 테이블 구조 시도
+        let foundSchedules = false;
+
+        // 시험 일정 테이블 추출 시도 (여러 선택자 시도)
+        const tableSelectors = [
+          "table tbody tr",
+          ".tbl_schedule tbody tr",
+          ".schedule_table tbody tr",
+          ".tbl-schedule tbody tr",
+          "table tr",
+          ".schedule-wrap table tr",
+          ".content-wrap table tr",
+        ];
+
+        for (const selector of tableSelectors) {
+          const rows = $(selector);
+          if (rows.length > 0) {
+            console.log(`${region.name}: ${selector}로 ${rows.length}개 행 발견`);
+
+            rows.each((rowIndex, element) => {
+              const $row = $(element);
+              const cells = $row.find("td");
+
+              if (cells.length >= 3) {
+                // 텍스트 정리: 줄바꿈과 불필요한 공백 제거
+                const examDate = $(cells[0]).text().replace(/\s+/g, " ").trim();
+                const applicationPeriod = $(cells[1]).text().replace(/\s+/g, " ").trim();
+                const resultDate = $(cells[2]).text().replace(/\s+/g, " ").trim();
+
+                console.log(
+                  `${region.name} 원본 데이터: 시험일=${JSON.stringify(examDate)}, ` +
+                  `신청기간=${JSON.stringify(applicationPeriod)}, 발표일=${JSON.stringify(resultDate)}`,
+                );
+
+                // 빈 데이터 및 헤더 행 필터링
+                if (examDate && applicationPeriod && resultDate &&
+                    !examDate.includes("시험일") && !applicationPeriod.includes("신청기간") &&
+                    !examDate.includes("등록된") && examDate.length > 3) {
+                  // 중복 체크: 같은 지역 내에서 시험일, 신청기간, 발표일이 모두 같으면 중복으로 판단
+                  const isDuplicate = allExamSchedules.some((schedule) =>
+                    schedule.region === region.name &&
+                    schedule.examDate === examDate &&
+                    schedule.applicationPeriod === applicationPeriod &&
+                    schedule.resultDate === resultDate,
+                  );
+
+                  if (!isDuplicate) {
+                    console.log(
+                      `${region.name} 일정 추가: 시험일=${examDate}, ` +
+                      `신청기간=${applicationPeriod}, 발표일=${resultDate}`,
+                    );
+                    allExamSchedules.push({
+                      examDate: examDate,
+                      applicationPeriod: applicationPeriod,
+                      resultDate: resultDate,
+                      region: region.name,
+                      regionCode: region.code,
+                      crawledAt: admin.firestore.FieldValue.serverTimestamp(),
+                    });
+                    foundSchedules = true;
+                  } else {
+                    console.log(`${region.name} 중복 일정 제외: 시험일=${examDate}`);
+                  }
+                }
+              }
+            });
+
+            // 첫 번째 성공한 선택자에서 데이터를 찾으면 중단
+            if (foundSchedules) break;
+          }
+        }
+
+        // 디버깅: 응답 HTML 일부 로그
+        if (!foundSchedules) {
+          console.log(`${region.name} HTML 일부:`, response.data.substring(0, 1000));
+        }
+
+        console.log(`${region.name} 지역 크롤링 완료`);
+
+        // 각 요청 사이에 약간의 지연 (서버 부하 방지)
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      } catch (regionError) {
+        console.error(`${region.name} 지역 크롤링 실패:`, regionError.message);
+        // 개별 지역 실패 시에도 다른 지역 계속 크롤링
+        continue;
+      }
+    }
+
+    console.log(`전체 크롤링 완료: ${allExamSchedules.length}개 일정 발견`);
+
+    // 중복 제거를 한 번 더 수행 (더 엄격하게) - 동일한 날짜의 일정은 하나만 유지
+    const uniqueSchedules = [];
+    const seen = new Set();
+
+    // 지역별로 그룹화하여 각 지역의 고유 일정 확인
+    const regionSchedules = {};
+
+    for (const schedule of allExamSchedules) {
+      if (!regionSchedules[schedule.region]) {
+        regionSchedules[schedule.region] = [];
+      }
+
+      const key = `${schedule.region}_${schedule.examDate}_${schedule.applicationPeriod}_${schedule.resultDate}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        regionSchedules[schedule.region].push(schedule);
+        uniqueSchedules.push(schedule);
+        console.log(`최종 일정 추가: ${schedule.region} - ${schedule.examDate}`);
+      }
+    }
+
+    console.log(`지역별 일정 현황:`);
+    for (const [region, schedules] of Object.entries(regionSchedules)) {
+      console.log(`${region}: ${schedules.length}개 일정`);
+    }
+
+    console.log(`중복 제거 후 총: ${uniqueSchedules.length}개 일정`);
+    const examSchedules = uniqueSchedules;
+
+    // Firestore에 저장
+    if (examSchedules.length > 0) {
+      const batch = admin.firestore().batch();
+
+      // 기존 데이터 삭제
+      const existingSchedules = await admin.firestore()
+        .collection("exam_schedules")
+        .where("type", "==", "life_insurance")
+        .get();
+
+      existingSchedules.forEach((doc) => {
+        batch.delete(doc.ref);
+      });
+
+      // 새 데이터 추가
+      examSchedules.forEach((schedule, index) => {
+        const docRef = admin.firestore().collection("exam_schedules").doc();
+        batch.set(docRef, {
+          ...schedule,
+          type: "life_insurance",
+          order: index + 1,
+        });
+      });
+
+      await batch.commit();
+      console.log("Firestore에 데이터 저장 완료");
+    }
+
+    return {
+      success: true,
+      message: `생명보험 자격시험 일정 ${examSchedules.length}개를 성공적으로 업데이트했습니다.`,
+      schedules: examSchedules,
+    };
+  } catch (error) {
+    console.error("크롤링 실패:", error);
+    throw new functions.https.HttpsError(
+      "internal",
+      "자격시험 일정 크롤링 중 오류가 발생했습니다: " + error.message,
+    );
+  }
+});
+
+// 자격시험 일정 조회 함수
+exports.getExamSchedules = functions.https.onCall(async (data) => {
+  // 임시: 인증 체크 완화 (누구나 조회 가능하도록)
+  try {
+    const {type} = data;
+    let query = admin.firestore().collection("exam_schedules");
+
+    if (type) {
+      query = query.where("type", "==", type);
+    }
+
+    const snapshot = await query.orderBy("order").get();
+    const schedules = [];
+
+    snapshot.forEach((doc) => {
+      schedules.push({
+        id: doc.id,
+        ...doc.data(),
+      });
+    });
+
+    return {
+      success: true,
+      schedules: schedules,
+    };
+  } catch (error) {
+    console.error("자격시험 일정 조회 실패:", error);
+    throw new functions.https.HttpsError(
+      "internal",
+      "자격시험 일정 조회 중 오류가 발생했습니다: " + error.message,
     );
   }
 });

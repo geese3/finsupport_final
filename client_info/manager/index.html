@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>오너스경영연구소 - 담당자 페이지</title>
+    <link rel="stylesheet" href="manager.css" />
+    <!-- Font Awesome 추가 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <!-- CryptoJS 추가 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <!-- Daum Postcode API -->
+    <script src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
+    <!-- Firebase SDK v11.8.0 (ES Modules) -->
+    <!-- Firebase SDK는 manager.js에서 ES 모듈로 import됩니다 -->
+  </head>
+  <body class="manager-page">
+    <!-- 로딩 화면 -->
+    <div id="loading-screen" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #f8f9fa; display: flex; align-items: center; justify-content: center; z-index: 9999;">
+      <div style="text-align: center;">
+        <div style="width: 40px; height: 40px; border: 4px solid #e3e3e3; border-top: 4px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px;"></div>
+        <div style="color: #666; font-size: 14px;">로딩 중...</div>
+      </div>
+    </div>
+    
+    <!-- 로그인 폼: 항상 최상위에 위치 -->
+    <div id="login-form" style="display: none;">
+      <div class="login-box">
+        <div class="logo-area" style="text-align:center; margin-bottom:24px;">
+          <img src="../common/assets/owners_logo.png" alt="로고" style="height: 100px;" />
+        </div>
+        <h2 style="text-align: center; margin-bottom: 24px; color: #2c3e50;">담당자 로그인</h2>
+        <div style="text-align: center; margin-bottom: 16px; color: #666; font-size: 14px;">
+          담당자 코드 또는 가이아 아이디로 로그인하세요
+        </div>
+        <div class="input-group">
+          <input type="text" id="manager-code" placeholder="담당자 코드 또는 가이아 아이디" autocomplete="username" style="text-transform: uppercase;" oninput="this.value = this.value.toUpperCase()" />
+          <input type="password" id="manager-password" placeholder="비밀번호" autocomplete="current-password" />
+        </div>
+        <button id="login-btn" type="button" onclick="login()">로그인</button>
+        <button id="reset-password-btn" type="button" onclick="resetPassword()" style="width: 100%; padding: 12px; background: #6c757d; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 10px; transition: background-color 0.3s ease;">비밀번호 초기화</button>
+        <div id="login-error" class="error-message" style="display: none; margin-top: 10px; color: #e74c3c; text-align: center;"></div>
+      </div>
+    </div>
+
+    <!-- 햄버거 메뉴 버튼 (모바일용) -->
+    <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-label="메뉴 열기" style="display: none;">
+      <span></span>
+      <span></span>
+      <span></span>
+    </button>
+
+    <!-- 사이드바 오버레이 (모바일용) -->
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
+
+    <div class="container manager-flex" id="main-container" style="display: none;">
+      <div class="sidebar" id="sidebar">
+        <div class="sidebar-logo">
+          <img src="../common/assets/owners_logo.png" alt="로고" style="height:80px;" />
+        </div>
+        <div class="manager-info" style="padding: 20px; text-align: center; border-bottom: 1px solid #eee;">
+          <div class="manager-name" id="current-manager-name" style="font-weight: bold; font-size: 18px; color: #2c3e50;"></div>
+          <div class="manager-code" id="current-manager-code" style="color: #666; font-size: 14px; margin-top: 4px;"></div>
+          <div class="manager-team" id="current-manager-team" style="color: #666; font-size: 14px; margin-top: 2px;"></div>
+          <div style="display: flex; gap: 10px; margin-top: 15px;">
+            <button id="sidebar-logout-btn" onclick="logout()">로그아웃</button>
+            <button id="sidebar-password-btn" onclick="changePassword()">비밀번호 변경</button>
+          </div>
+        </div>
+        <ul class="sidebar-menu">
+          <li id="menu-profile" class="active">
+            <span class="sidebar-icon" aria-hidden="true">
+              <i class="fas fa-user"></i>
+            </span>
+            <span class="sidebar-text">내 정보 관리</span>
+          </li>
+          <li id="menu-clients">
+            <span class="sidebar-icon" aria-hidden="true">
+              <i class="fas fa-users"></i>
+            </span>
+            <span class="sidebar-text">담당 고객 조회</span>
+          </li>
+          <li id="menu-insurance">
+            <span class="sidebar-icon" aria-hidden="true">
+              <i class="fas fa-building"></i>
+            </span>
+            <span class="sidebar-text">보험사 계정 관리</span>
+          </li>
+          <li id="menu-exam">
+            <span class="sidebar-icon" aria-hidden="true">
+              <i class="fas fa-calendar-alt"></i>
+            </span>
+            <span class="sidebar-text">자격시험 일정</span>
+          </li>
+        </ul>
+      </div>
+
+      <div class="main-content" id="main-content">
+        <!-- 내 정보 관리 영역 -->
+        <div id="profile-section" class="content-section">
+          <h3 style="text-align: center;">내 정보 관리</h3>
+          
+          <div class="profile-card">
+            <div class="card-header">
+              <h4><i class="fas fa-user-circle"></i> 기본 정보</h4>
+            </div>
+            <div class="card-body">
+              <div class="info-row">
+                <label>이름:</label>
+                <span id="profile-name"></span>
+              </div>
+              <div class="info-row">
+                <label>담당자 코드:</label>
+                <span id="profile-code"></span>
+              </div>
+              <div class="info-row">
+                <label>팀명:</label>
+                <span id="profile-team"></span>
+                <button class="edit-btn" onclick="editField('team')"><i class="fas fa-edit"></i></button>
+              </div>
+              <div class="info-row">
+                <label>직책:</label>
+                <span id="profile-role"></span>
+                <button class="edit-btn" onclick="editField('role')"><i class="fas fa-edit"></i></button>
+              </div>
+              <div class="info-row">
+                <label>연락처:</label>
+                <span id="profile-phone"></span>
+                <button class="edit-btn" onclick="editField('phone')"><i class="fas fa-edit"></i></button>
+              </div>
+              <div class="info-row">
+                <label>이메일:</label>
+                <span id="profile-email"></span>
+                <button class="edit-btn" onclick="editField('email')"><i class="fas fa-edit"></i></button>
+              </div>
+            </div>
+          </div>
+
+          <div class="profile-card">
+            <div class="card-header">
+              <h4><i class="fas fa-globe"></i> 가이아 계정 정보</h4>
+            </div>
+            <div class="card-body">
+              <div class="info-row">
+                <label>가이아 아이디:</label>
+                <span id="profile-gaia-id"></span>
+                <button class="edit-btn" onclick="editField('gaiaId')"><i class="fas fa-edit"></i></button>
+              </div>
+              <div class="info-row">
+                <label>가이아 비밀번호:</label>
+                <span id="profile-gaia-password"></span>
+                <button class="edit-btn" onclick="editField('gaiaPassword')"><i class="fas fa-edit"></i></button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- 담당 고객 조회 영역 -->
+        <div id="clients-section" class="content-section" style="display: none;">
+          <h3 style="text-align: center;">담당 고객 조회</h3>
+          
+          <div class="search-area">
+            <input type="text" id="client-search" placeholder="고객명, 전화번호로 검색" />
+            <button type="button" id="client-search-reset" class="search-reset-btn" aria-label="초기화">
+              <i class="fas fa-redo-alt"></i>
+            </button>
+          </div>
+          <div id="client-list" class="card-list"></div>
+        </div>
+
+        <!-- 보험사 계정 관리 영역 -->
+        <div id="insurance-section" class="content-section" style="display: none;">
+          <h3 style="text-align: center;">보험사 계정 관리</h3>
+          
+          <div class="search-area">
+            <input type="text" id="insurance-search" placeholder="보험사명으로 검색" />
+            <button type="button" id="insurance-search-reset" class="search-reset-btn" aria-label="초기화">
+              <i class="fas fa-redo-alt"></i>
+            </button>
+          </div>
+          
+          <div class="insurance-container">
+            <div class="insurance-category">
+              <h4 class="category-header">
+                <span>생명보험사</span>
+                <span class="category-count" id="life-count"></span>
+              </h4>
+              <div id="life-insurance-list" class="insurance-card-grid"></div>
+            </div>
+            
+            <div class="insurance-category">
+              <h4 class="category-header">
+                <span>손해보험사</span>
+                <span class="category-count" id="nonlife-count"></span>
+              </h4>
+              <div id="nonlife-insurance-list" class="insurance-card-grid"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 자격시험 일정 영역 -->
+        <div id="exam-section" class="content-section" style="display: none;">
+          <h3 style="text-align: center;">생명보험 자격시험 일정</h3>
+          
+          <!-- 크롤링 버튼 -->
+          <div style="text-align: center; margin-bottom: 30px;">
+            <button id="crawlScheduleBtn" onclick="crawlLifeInsuranceSchedule()" style="background: #3498db; color: white; padding: 12px 24px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; box-shadow: 0 2px 4px rgba(52, 152, 219, 0.2);">
+              <i class="fas fa-sync-alt"></i> 일정 새로고침
+            </button>
+          </div>
+          
+          <!-- 일정 표시 영역 -->
+          <div id="lifeInsuranceSchedule">
+            <div style="text-align: center; padding: 40px; color: #666;">
+              <i class="fas fa-calendar" style="font-size: 48px; margin-bottom: 20px; opacity: 0.5;"></i>
+              <p>일정 새로고침 버튼을 눌러서 최신 시험 일정을 확인하세요.</p>
+            </div>
+          </div>
+        </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 모달들 -->
+    <div id="editModal" class="modal" style="display: none">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h4 id="edit-modal-title">정보 수정</h4>
+          <span class="close" id="closeEditModal" onclick="closeEditModal()">&times;</span>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <div id="team-input-group" style="display: none; align-items: center; gap: 8px;">
+              <label style="margin-bottom: 0; margin-right: 8px;">팀명:</label>
+              <input type="text" id="edit-modal-team-input" placeholder="숫자만 입력" style="flex: 1;" />
+              <span style="font-weight: bold; color: #2c3e50;">팀</span>
+            </div>
+            <label id="edit-modal-label" style="display: none;">값:</label>
+            <input type="text" id="edit-modal-input" style="display: none;" />
+            <select id="edit-modal-select" style="display: none;">
+              <!-- 동적으로 옵션이 추가됩니다 -->
+            </select>
+            <div id="phone-input-group" style="display: none;">
+              <!-- 동적으로 phone 입력 HTML이 생성됩니다 -->
+            </div>
+            <div id="email-input-group" style="display: none;">
+              <div class="email-group">
+                <input type="text" id="edit-modal-email-id" placeholder="아이디" />
+                <span>@</span>
+                <select id="edit-modal-email-domain">
+                  <option value="">도메인 선택</option>
+                  <option value="gmail.com">gmail.com</option>
+                  <option value="naver.com">naver.com</option>
+                  <option value="daum.net">daum.net</option>
+                  <option value="hanmail.net">hanmail.net</option>
+                  <option value="nate.com">nate.com</option>
+                  <option value="hotmail.com">hotmail.com</option>
+                  <option value="yahoo.com">yahoo.com</option>
+                  <option value="outlook.com">outlook.com</option>
+                  <option value="custom">직접입력</option>
+                </select>
+                <input type="text" id="edit-modal-email-custom" placeholder="도메인 직접입력" style="display: none;" />
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="secondary-btn" onclick="closeEditModal()">취소</button>
+          <button class="primary-btn" onclick="saveEdit()">저장</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="passwordModal" class="modal" style="display: none">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h4><i class="fas fa-key"></i> 비밀번호 변경</h4>
+          <span class="close" id="closePasswordModal" onclick="closePasswordModal()">&times;</span>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label>현재 비밀번호:</label>
+            <input type="password" id="current-password" onkeypress="handlePasswordModalEnter(event)" />
+          </div>
+          <div class="form-group">
+            <label>새 비밀번호:</label>
+            <input type="password" id="new-password" onkeypress="handlePasswordModalEnter(event)" />
+          </div>
+          <div class="form-group">
+            <label>새 비밀번호 확인:</label>
+            <input type="password" id="confirm-password" onkeypress="handlePasswordModalEnter(event)" />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="secondary-btn" onclick="closePasswordModal()">취소</button>
+          <button class="primary-btn" id="save-password-btn" onclick="savePassword()">변경</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="clientModal" class="modal" style="display: none">
+      <div class="modal-content large-modal">
+        <div class="modal-header">
+          <h4 id="client-modal-title">고객 정보</h4>
+          <span class="close" id="closeClientModal" onclick="closeClientModal()">&times;</span>
+        </div>
+        <div class="modal-body" id="client-modal-content">
+          <!-- 고객 정보가 여기에 표시됩니다 -->
+        </div>
+        <div class="modal-footer">
+          <button class="secondary-btn" onclick="closeClientModal()">닫기</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="insuranceModal" class="modal" style="display: none">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h4 id="insurance-modal-title">보험사 계정 정보</h4>
+          <span class="close" id="closeInsuranceModal" onclick="closeInsuranceModal()">&times;</span>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label>보험사:</label>
+            <input type="text" id="insurance-company" readonly />
+          </div>
+          <div class="form-group">
+            <label>사원번호:</label>
+            <input type="text" id="insurance-employee-id" />
+          </div>
+          <div class="form-group">
+            <label>비밀번호:</label>
+            <input type="text" id="insurance-password" />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="secondary-btn" onclick="closeInsuranceModal()">취소</button>
+          <button class="primary-btn" onclick="saveInsuranceAccount()">저장</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="manager.js"></script>
+  </body>
+</html>

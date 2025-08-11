@@ -1,0 +1,738 @@
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.8.0/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.8.0/firebase-auth.js";
+import { getFirestore, collection, getDocs, query, where, doc, updateDoc, collection as fsCollection, addDoc, deleteDoc, onSnapshot, orderBy, Timestamp, limit, startAfter } from "https://www.gstatic.com/firebasejs/11.8.0/firebase-firestore.js";
+import { db } from "./database.js";
+
+// import { initializeApp } from "firebase/app";
+// import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from "firebase/auth";
+// import { ENCRYPT_KEY } from "./script.js";
+
+// Firebase Auth 초기화
+const auth = getAuth();
+
+// 암호화 키는 config에서 가져옴
+const ENCRYPT_KEY = window.currentConfig.encryptKey;
+window.ENCRYPT_KEY = ENCRYPT_KEY;
+
+// CryptoJS는 window.CryptoJS로 접근
+function decryptSSN(ciphertext) {
+  try {
+    if (!ciphertext) return "";
+    if (!window.CryptoJS) {
+      console.error("CryptoJS가 로드되지 않았습니다.");
+      return "복호화 실패";
+    }
+    if (!ENCRYPT_KEY) {
+      console.error("암호화 키가 정의되지 않았습니다.");
+      return "복호화 실패";
+    }
+    const bytes = window.CryptoJS.AES.decrypt(ciphertext, ENCRYPT_KEY);
+    const decrypted = bytes.toString(window.CryptoJS.enc.Utf8);
+    return decrypted || "복호화 실패";
+  } catch (e) {
+    console.error("복호화 중 에러 발생:", e);
+    return "복호화 실패";
+  }
+}
+
+let allClients = [];
+let pagedClients = [];
+let lastVisible = null;
+let isLoadingClients = false;
+const PAGE_SIZE = 20;
+
+// DOM 요소 접근을 위한 변수들
+let searchInput, cardList, detailModal, detailContent, closeModal;
+
+// 허용된 관리자 이메일 목록
+const allowedAdmins = [
+  'geese3433@gmail.com',  // 기존 관리자
+  'iqhali93@gmail.com',
+];
+
+// 보험사 목록 정의
+const insuranceCompanies = [
+  '흥국생명',
+  '라이프생명',
+  'KB라이프',
+  '롯데손보',
+  'KDB생명',
+  '처브라이프생명',
+  '푸르덴셜생명',
+  '메리츠화재',
+  '한화손해',
+  '미래에셋생명',
+  '푸본현대생명',
+  '농협생명',
+  '교보라이프',
+  '라이프플래닛생명',
+  '현대해상',
+  'KB손해',
+  '신한라이프',
+  '동양생명',
+  'MG손해보험',
+  '카디프생명',
+  'IBK기업은행',
+  '삼성화재',
+  'iM라이프생명',
+  '흥국화재',
+  '라이나손해보험',
+  '농협손보',
+  '하나생명',
+  'DB손해',
+  'ABL생명',
+  '한화생명',
+  '삼성생명',
+  '하나손해',
+  '메트라이프생명'
+];
+
+// 생명보험사/손해보험사 구분
+const lifeCompanies = insuranceCompanies.filter(name => name.includes('생명') || name.toLowerCase().includes('life') || name.includes('라이프'));
+const nonLifeCompanies = insuranceCompanies.filter(name => !lifeCompanies.includes(name));
+
+// Firestore managers 컬렉션 연동
+let managers = [];
+
+async function fetchManagers() {
+  const snapshot = await getDocs(fsCollection(db, 'managers'));
+  managers = snapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name }));
+  updateManagersList();
+}
+
+function listenManagers() {
+  // 실시간 반영 + 등록순 정렬
+  const q = query(fsCollection(db, 'managers'), orderBy('createdAt', 'asc'));
+  onSnapshot(q, (snapshot) => {
+    managers = snapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name }));
+    updateManagersList();
+  });
+}
+
+function updateManagersList() {
+  const managersList = document.getElementById('managerList');
+  if (!managersList) return;
+  managersList.innerHTML = managers.map((m, index) => {
+    return `<div class="manager-item" data-id="${m.id}">
+      <span class="manager-name" data-index="${index}">${m.name}</span>
+      <button class="edit-manager" data-id="${m.id}">수정</button>
+      <button class="delete-manager" data-id="${m.id}">삭제</button>
+    </div>`;
+  }).join('');
+}
+
+function initManagers() {
+  const managersList = document.getElementById('managerList');
+  const managerInput = document.getElementById('newManager');
+  const addManagerBtn = document.querySelector('.manager-input-group button');
+  const managerInputGroup = document.querySelector('.manager-input-group');
+
+  // form 태그가 있으면 submit 이벤트 막기 (중복 저장 방지)
+  if (managerInputGroup && managerInputGroup.closest('form')) {
+    managerInputGroup.closest('form').addEventListener('submit', function(e) {
+      e.preventDefault();
+      return false;
+    });
+  }
+
+  let isAddingManager = false;
+  // 담당자 추가 함수 (중복 방지)
+  async function addManager() {
+    if (isAddingManager) return;
+    isAddingManager = true;
+    const name = managerInput.value.trim();
+    if (name) {
+      await addDoc(fsCollection(db, 'managers'), { name, createdAt: Timestamp.now() });
+      managerInput.value = '';
+    }
+    isAddingManager = false;
+  }
+
+  // 담당자 추가 (버튼)
+  addManagerBtn.addEventListener('click', addManager);
+  // 담당자 추가 (엔터키)
+  managerInput.addEventListener('keydown', async (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      await addManager();
+    }
+  });
+
+  // 담당자 수정/삭제 (인라인 수정 UI)
+  managersList.addEventListener('click', async (e) => {
+    const id = e.target.dataset.id;
+    if (e.target.classList.contains('delete-manager')) {
+      if (confirm('정말 삭제하시겠습니까?')) {
+        await deleteDoc(doc(db, 'managers', id));
+      }
+    } else if (e.target.classList.contains('edit-manager')) {
+      const itemDiv = e.target.closest('.manager-item');
+      const current = managers.find(m => m.id === id);
+      if (!itemDiv || !current) return;
+      // 인라인 수정 UI로 변경
+      itemDiv.innerHTML = `
+        <input type="text" class="edit-manager-input" value="${current.name}" style="padding:6px; border:1px solid #ccc; border-radius:4px; width:120px; margin-right:8px;">
+        <button class="edit-manager-confirm" data-id="${id}" style="background:#4CAF50; color:#fff; padding:6px 12px; border-radius:4px; border:none; margin-right:4px;">확인</button>
+        <button class="edit-manager-cancel" data-id="${id}" style="background:#ccc; color:#333; padding:6px 12px; border-radius:4px; border:none;">취소</button>
+      `;
+      // 확인/취소 이벤트
+      itemDiv.querySelector('.edit-manager-input').focus();
+    } else if (e.target.classList.contains('edit-manager-confirm')) {
+      const itemDiv = e.target.closest('.manager-item');
+      const input = itemDiv.querySelector('.edit-manager-input');
+      const newName = input.value.trim();
+      if (newName) {
+        await updateDoc(doc(db, 'managers', id), { name: newName });
+      }
+    } else if (e.target.classList.contains('edit-manager-cancel')) {
+      updateManagersList();
+    }
+  });
+
+  // 항상 최신 managers로 실시간 반영
+  listenManagers();
+}
+
+// DOM이 로드된 후 실행
+document.addEventListener('DOMContentLoaded', () => {
+  // DOM 요소 초기화
+  searchInput = document.getElementById("searchInput");
+  cardList = document.getElementById("cardList");
+  detailModal = document.getElementById("detailModal");
+  detailContent = document.getElementById("detailContent");
+  closeModal = document.getElementById("closeModal");
+
+  // 이벤트 리스너 설정
+  if (searchInput) {
+    searchInput.addEventListener("input", handleSearch);
+  }
+
+  if (closeModal) {
+    closeModal.onclick = () => {
+      detailModal.style.display = "none";
+      setHamburgerVisible(true);
+    };
+  }
+
+  window.addEventListener('click', (e) => {
+    if (detailModal && e.target === detailModal) {
+      detailModal.style.display = "none";
+      setHamburgerVisible(true);
+    }
+  });
+
+  // 엔터키로 로그인
+  const emailInput = document.getElementById('admin-email');
+  const passwordInput = document.getElementById('admin-password');
+  [emailInput, passwordInput].forEach(input => {
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        login();
+      }
+    });
+  });
+
+  initManagers();
+
+  // 사이드 메뉴 전환 기능
+  initMenuSwitch();
+
+  // 검색 초기화 버튼 기능
+  const searchResetBtn = document.getElementById('searchResetBtn');
+  if (searchResetBtn && searchInput && cardList) {
+    searchResetBtn.addEventListener('click', () => {
+      searchInput.value = '';
+      renderCards(allClients);
+    });
+  }
+
+  // 햄버거 메뉴 토글 (모바일)
+  const sidebarToggle = document.getElementById('sidebar-toggle');
+  const sidebar = document.getElementById('sidebar');
+  if (sidebarToggle && sidebar) {
+    sidebarToggle.addEventListener('click', () => {
+      // 모달이 열려 있으면 닫기
+      if (detailModal && detailModal.style.display === 'flex') {
+        detailModal.style.display = 'none';
+        setHamburgerVisible(true);
+      }
+      sidebar.classList.toggle('open');
+    });
+    // 사이드바 메뉴 클릭 시 모바일에서 자동 닫힘
+    const sidebarMenu = document.querySelector('.sidebar-menu');
+    if (sidebarMenu) {
+      sidebarMenu.addEventListener('click', (e) => {
+        if (window.innerWidth <= 900 && sidebar.classList.contains('open')) {
+          sidebar.classList.remove('open');
+        }
+      });
+    }
+  }
+
+  setupInfiniteScroll();
+});
+
+// 검색 처리 함수 (고객명, 전화번호, 담당자명 모두 검색)
+function handleSearch() {
+  const keyword = this.value.trim();
+  if (!keyword) {
+    renderCards(pagedClients.length > 0 ? pagedClients : allClients);
+    return;
+  }
+  const filtered = allClients.filter(
+    (client) =>
+      (client.name && client.name.includes(keyword)) ||
+      (client.phone && client.phone.replace(/-/g, "").includes(keyword.replace(/-/g, ""))) ||
+      (client.manager && client.manager.includes(keyword))
+  );
+  renderCards(filtered);
+}
+
+// 로그인/로그아웃 시 body에 login-mode 클래스 토글
+function setLoginMode(isLogin) {
+  if (isLogin) {
+    document.body.classList.remove('login-mode');
+    document.querySelector('.admin-flex').style.display = '';
+    document.getElementById('login-form').style.display = 'none';
+  } else {
+    document.body.classList.add('login-mode');
+    document.querySelector('.admin-flex').style.display = 'none';
+    document.getElementById('login-form').style.display = '';
+  }
+}
+
+// 로그인 함수를 전역으로 노출
+window.login = async function () {
+  const email = document.getElementById("admin-email").value;
+  const password = document.getElementById("admin-password").value;
+  
+  try {
+    if (!email || !password) {
+      throw new Error("이메일과 비밀번호를 모두 입력해주세요.");
+    }
+    
+    // 로그인 시도
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    
+    // 로그인 후 인증 상태 확인
+    const currentUser = auth.currentUser;
+    
+    if (!currentUser) {
+      throw new Error("로그인 후에도 사용자 정보를 가져올 수 없습니다.");
+    }
+    
+    // 허용된 관리자인지 확인
+    if (!allowedAdmins.includes(currentUser.email)) {
+      await signOut(auth);
+      throw new Error("관리자 계정이 아닙니다.");
+    }
+    
+    // 토큰 새로고침
+    await currentUser.getIdToken(true);
+    
+    document.getElementById("login-form").style.display = "none";
+    document.getElementById("admin-content").style.display = "block";
+    setLoginMode(true);
+    loadAdminData();
+    listenManagers();
+  } catch (error) {
+    console.error("로그인 실패 상세:", error);
+    
+    // 에러 메시지 개선
+    let errorMessage = "로그인에 실패했습니다. ";
+    switch (error.code) {
+      case 'auth/invalid-credential':
+        errorMessage += "이메일 또는 비밀번호가 올바르지 않습니다. Firebase 콘솔에서 계정을 다시 확인해주세요.";
+        break;
+      case 'auth/user-not-found':
+        errorMessage += "등록되지 않은 이메일입니다. Firebase 콘솔에서 계정을 생성해주세요.";
+        break;
+      case 'auth/wrong-password':
+        errorMessage += "비밀번호가 올바르지 않습니다. Firebase 콘솔에서 비밀번호를 확인해주세요.";
+        break;
+      case 'auth/invalid-email':
+        errorMessage += "올바른 이메일 형식이 아닙니다.";
+        break;
+      case 'auth/user-disabled':
+        errorMessage += "비활성화된 계정입니다. Firebase 콘솔에서 계정 상태를 확인해주세요.";
+        break;
+      default:
+        errorMessage += error.message;
+    }
+    
+    alert(errorMessage);
+    
+    // 로그인 실패 시 입력 필드 초기화
+    document.getElementById("admin-password").value = "";
+    setLoginMode(false);
+  }
+};
+
+// 로그아웃 함수도 전역으로 노출
+window.logout = function () {
+  signOut(auth).then(() => {
+    // 검색어 초기화
+    if (searchInput) {
+      searchInput.value = '';
+    }
+    // 카드 리스트 초기화
+    if (cardList) {
+      cardList.innerHTML = '<div class="search-guide">검색어를 입력하세요.</div>';
+    }
+    managers = [];
+    updateManagersList();
+    setLoginMode(false);
+  });
+};
+
+// 인증 상태 변경 감지
+onAuthStateChanged(auth, async (user) => {
+  if (user) {
+    try {
+      // 토큰 새로고침
+      const token = await user.getIdToken(true);
+      
+      // 허용된 관리자인지 확인
+      if (allowedAdmins.includes(user.email)) {
+        document.getElementById("login-form").style.display = "none";
+        document.getElementById("admin-content").style.display = "block";
+        setLoginMode(true);
+        loadAdminData();
+        listenManagers();
+        listenClients();
+      } else {
+        await signOut(auth);
+        document.getElementById("login-form").style.display = "block";
+        document.getElementById("admin-content").style.display = "none";
+        setLoginMode(false);
+      }
+    } catch (error) {
+      console.error("토큰 새로고침 실패:", error);
+      setLoginMode(false);
+    }
+  } else {
+    document.getElementById("login-form").style.display = "block";
+    document.getElementById("admin-content").style.display = "none";
+    setLoginMode(false);
+  }
+});
+
+// 관리자 데이터 로드
+function loadAdminData() {
+  listenClients();
+}
+
+// 카드 렌더링 (고객 담당자명 표시 및 미지정 시 배정 기능)
+function renderCards(data) {
+  if (!cardList) return;
+  if (!data || data.length === 0) {
+    cardList.innerHTML = '<div class="search-guide">등록된 고객 정보가 없습니다.</div>';
+    return;
+  }
+  cardList.innerHTML = "";
+  // 중복 제거 없이 모든 고객 표시
+  data.forEach((client) => {
+    const card = document.createElement("div");
+    card.className = "client-card";
+    let phoneDisplay = client.phone || "";
+    if (client.phoneCarrier) {
+      phoneDisplay = `(${client.phoneCarrier}) ` + phoneDisplay;
+    }
+    // 담당자 select + 배정 버튼 항상 표시
+    let managerName = client.manager || '';
+    let managerHtml = `<div class=\"manager-label\">담당자: 
+      <select class=\"assign-manager-select\">
+        <option value=\"\">선택</option>
+        ${managers.map(m => `<option value=\"${m.name}\"${m.name === managerName ? ' selected' : ''}>${m.name}</option>`).join('')}
+      </select>
+      <button class=\"assign-manager-btn\">배정</button>
+    </div>`;
+    card.innerHTML = `
+      <div class=\"name\">${client.name}</div>
+      <div class=\"phone\">${phoneDisplay}</div>
+      ${managerHtml}
+    `;
+    card.onclick = (e) => {
+      // 배정 버튼 클릭 시에는 상세 모달 열지 않음
+      if (e.target.classList.contains('assign-manager-btn')) return;
+      if (e.target.classList.contains('assign-manager-select')) return;
+      showDetail(client);
+    };
+    // 담당자 배정 이벤트
+    card.querySelector('.assign-manager-btn')?.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const select = card.querySelector('.assign-manager-select');
+      const selectedManager = select.value;
+      if (!selectedManager) {
+        alert('담당자를 선택해주세요.');
+        return;
+      }
+      try {
+        await updateDoc(doc(db, 'client_info', client.id), { manager: selectedManager });
+        client.manager = selectedManager;
+        renderCards(data); // 새로고침
+        alert('담당자가 배정되었습니다.');
+      } catch (err) {
+        alert('담당자 배정에 실패했습니다.');
+      }
+    });
+    cardList.appendChild(card);
+  });
+}
+
+// 햄버거 버튼 show/hide 함수
+function setHamburgerVisible(visible) {
+  const sidebarToggle = document.getElementById('sidebar-toggle');
+  if (sidebarToggle) {
+    sidebarToggle.style.display = visible ? '' : 'none';
+  }
+}
+
+// 상세 정보 표시 (수정/삭제 버튼 및 인라인 수정 폼 추가)
+function showDetail(client) {
+  if (!detailContent || !detailModal) return;
+
+  // 모달 열릴 때 햄버거 버튼 숨김
+  setHamburgerVisible(false);
+  detailModal.style.display = "flex";
+
+  // 수정 모드 여부
+  let isEditMode = false;
+
+  function renderDetail(editMode = false) {
+    isEditMode = editMode;
+    if (!editMode) {
+      // 일반 상세 보기
+      let html = '';
+      html += `<div style='margin-bottom:10px;'><b>성함</b>: ${client.name}</div>`;
+      html += `<div style='margin-bottom:10px;'><b>주민번호</b>: ${client.ssn ? decryptSSN(client.ssn) : ''}</div>`;
+      html += `<div style='margin-bottom:10px;'><b>핸드폰번호</b>: ${client.phoneCarrier ? '('+client.phoneCarrier+') ' : ''}${client.phone || ''}</div>`;
+      html += `<div style='margin-bottom:10px;'><b>회사전화번호</b>: ${client.companyPhone || ''}</div>`;
+      html += `<div style='margin-bottom:10px;'><b>주소</b>: ${(client.address || '') + (client.addressDetail ? ' ' + client.addressDetail : '')}</div>`;
+      html += `<div style='margin-bottom:10px;'><b>직장명</b>: ${client.occupation || ''}</div>`;
+      html += `<div style='margin-bottom:10px;'><b>하시는 일</b>: ${client.jobDetail || ''}</div>`;
+      html += `<div style='margin-bottom:10px;'><b>키/몸무게</b>: ${(client.height || '') + (client.height && client.weight ? ' / ' : '') + (client.weight || '')}</div>`;
+      html += `<div style='margin-bottom:10px;'><b>치료이력</b>: ${client.medicalHistory || ''}</div>`;
+      html += `<div style='margin-bottom:10px;'><b>운전여부</b>: ${client.driving === 'yes' ? '예' : client.driving === 'no' ? '아니오' : ''}</div>`;
+      html += `<div style='margin-bottom:10px;'><b>직원 수</b>: ${client.employeeCount || ''}</div>`;
+      html += `<div style='margin-bottom:10px;'><b>담당자</b>: ${client.manager || ''}</div>`;
+      
+      // 보험사 정보 표시
+      html += `<div style='margin-bottom:10px;'><b>보험사</b>: ${client.insuranceCompanies ? client.insuranceCompanies.join(', ') : ''}</div>`;
+      
+      // 비고 표시
+      html += `<div style='margin-bottom:10px;'><b>비고</b>: ${client.note || ''}</div>`;
+      
+      html += `<div style='margin-top:24px; text-align:right;'>
+        <button class='edit-client-btn modal-btn blue' style='margin-right:8px;'>수정</button>
+        <button class='delete-client-btn modal-btn red'>삭제</button>
+      </div>`;
+      detailContent.innerHTML = html;
+    } else {
+      // 전화번호 분리 함수
+      function splitPhone(phone) {
+        if (!phone) return ['', '', ''];
+        const match = phone.match(/(\d{2,3})[-]?(\d{3,4})[-]?(\d{4})/);
+        if (match) return [match[1], match[2], match[3]];
+        return ['', '', ''];
+      }
+      const [phone1, phone2, phone3] = splitPhone(client.phone);
+      const [companyPhone1, companyPhone2, companyPhone3] = splitPhone(client.companyPhone);
+      detailContent.innerHTML = `
+        <form id='edit-client-form'>
+          <div class='form-row'><label for='edit-name'>성함</label><input type='text' id='edit-name' value='${client.name || ''}' /></div>
+          <div class='form-row'><label>핸드폰번호</label>
+            <div class='phone-group'>
+              <input type='text' id='edit-phone1' value='${phone1}' maxlength='3' /> -
+              <input type='text' id='edit-phone2' value='${phone2}' maxlength='4' /> -
+              <input type='text' id='edit-phone3' value='${phone3}' maxlength='4' />
+            </div>
+          </div>
+          <div class='form-row'><label>회사전화번호</label>
+            <div class='phone-group'>
+              <input type='text' id='edit-companyPhone1' value='${companyPhone1}' maxlength='3' /> -
+              <input type='text' id='edit-companyPhone2' value='${companyPhone2}' maxlength='4' /> -
+              <input type='text' id='edit-companyPhone3' value='${companyPhone3}' maxlength='4' />
+            </div>
+          </div>
+          <div class='form-row'><label for='edit-address'>주소</label><input type='text' id='edit-address' value='${client.address || ''}' /></div>
+          <div class='form-row'><label for='edit-addressDetail'>상세주소</label><input type='text' id='edit-addressDetail' value='${client.addressDetail || ''}' /></div>
+          <div class='form-row'><label for='edit-occupation'>직장명</label><input type='text' id='edit-occupation' value='${client.occupation || ''}' /></div>
+          <div class='form-row'><label for='edit-jobDetail'>하시는 일</label><input type='text' id='edit-jobDetail' value='${client.jobDetail || ''}' /></div>
+          <div class='form-row'><label>키/몸무게</label>
+            <input type='text' id='edit-height' value='${client.height || ''}' style='width:60px;' placeholder='키' /> /
+            <input type='text' id='edit-weight' value='${client.weight || ''}' style='width:60px;' placeholder='몸무게' />
+          </div>
+          <div class='form-row'><label for='edit-medicalHistory'>치료이력</label><input type='text' id='edit-medicalHistory' value='${client.medicalHistory || ''}' /></div>
+          <div class='form-row'><label for='edit-driving'>운전여부</label>
+            <select id='edit-driving'><option value=''>선택</option><option value='yes' ${client.driving==='yes'?'selected':''}>예</option><option value='no' ${client.driving==='no'?'selected':''}>아니오</option></select>
+          </div>
+          <div class='form-row'><label for='edit-employeeCount'>직원 수</label><input type='text' id='edit-employeeCount' value='${client.employeeCount || ''}' /></div>
+          <div class='form-row'><label for='edit-manager'>담당자</label>
+            <select id='edit-manager'><option value=''>선택</option>${managers.map(m => `<option value='${m.name}'${m.name===client.manager?' selected':''}>${m.name}</option>`).join('')}</select>
+          </div>
+          <div class='form-row'><label>보험사</label>
+            <div style='width:100%'>
+              <div style='margin-top:4px; margin-bottom:4px;'><b style='color:#2d7;'>생명보험사</b></div>
+              <div class='insurance-group'>
+                ${lifeCompanies.map(company => `
+                  <label class='insurance-label'><input type='checkbox' name='insurance' value='${company}' 
+                    ${client.insuranceCompanies && client.insuranceCompanies.includes(company) ? 'checked' : ''}>${company}</label>
+                `).join('')}
+              </div>
+              <div style='margin-top:4px; margin-bottom:4px;'><b style='color:#3498db;'>손해보험사</b></div>
+              <div class='insurance-group'>
+                ${nonLifeCompanies.map(company => `
+                  <label class='insurance-label'><input type='checkbox' name='insurance' value='${company}' 
+                    ${client.insuranceCompanies && client.insuranceCompanies.includes(company) ? 'checked' : ''}>${company}</label>
+                `).join('')}
+              </div>
+            </div>
+          </div>
+          <div class='form-row'><label for='edit-note'>비고</label>
+            <textarea id='edit-note' style='width:100%; height:80px; margin-top:4px; padding:8px; border:1px solid #ccc; border-radius:4px;'>${client.note || ''}</textarea>
+          </div>
+          <div style='margin-top:24px; text-align:right;'>
+            <button class='save-client-btn modal-btn blue' style='margin-right:8px;'>저장</button>
+            <button class='cancel-client-btn modal-btn'>취소</button>
+          </div>
+        </form>
+      `;
+    }
+  }
+
+  renderDetail(false);
+
+  // 모달 내 버튼 이벤트 위임
+  detailContent.onclick = async (e) => {
+    if (e.target.classList.contains('edit-client-btn')) {
+      renderDetail(true);
+    } else if (e.target.classList.contains('cancel-client-btn')) {
+      renderDetail(false);
+    } else if (e.target.classList.contains('save-client-btn')) {
+      // 수정 저장
+      const selectedInsuranceCompanies = Array.from(document.querySelectorAll('input[name="insurance"]:checked'))
+        .map(checkbox => checkbox.value);
+      // 전화번호 합치기
+      const phone = [
+        document.getElementById('edit-phone1').value,
+        document.getElementById('edit-phone2').value,
+        document.getElementById('edit-phone3').value
+      ].join('-');
+      const companyPhone = [
+        document.getElementById('edit-companyPhone1').value,
+        document.getElementById('edit-companyPhone2').value,
+        document.getElementById('edit-companyPhone3').value
+      ].join('-');
+      const updateData = {
+        name: document.getElementById('edit-name').value,
+        phone,
+        companyPhone,
+        address: document.getElementById('edit-address').value,
+        addressDetail: document.getElementById('edit-addressDetail').value,
+        occupation: document.getElementById('edit-occupation').value,
+        jobDetail: document.getElementById('edit-jobDetail').value,
+        height: document.getElementById('edit-height').value,
+        weight: document.getElementById('edit-weight').value,
+        medicalHistory: document.getElementById('edit-medicalHistory').value,
+        driving: document.getElementById('edit-driving').value,
+        employeeCount: document.getElementById('edit-employeeCount').value,
+        manager: document.getElementById('edit-manager').value,
+        insuranceCompanies: selectedInsuranceCompanies,
+        note: document.getElementById('edit-note').value
+      };
+      try {
+        await updateDoc(doc(db, 'client_info', client.id), updateData);
+        Object.assign(client, updateData);
+        alert('수정되었습니다.');
+        renderDetail(false);
+      } catch (err) {
+        alert('수정에 실패했습니다.');
+      }
+    } else if (e.target.classList.contains('delete-client-btn')) {
+      if (confirm('정말 삭제하시겠습니까?')) {
+        try {
+          await deleteDoc(doc(db, 'client_info', client.id));
+          detailModal.style.display = 'none';
+          setHamburgerVisible(true);
+          // 삭제 후 검색어가 있으면 다시 필터링
+          if (searchInput && searchInput.value.trim()) {
+            handleSearch.call(searchInput);
+          } else {
+            cardList.innerHTML = '<div class="search-guide">검색어를 입력하세요.</div>';
+          }
+        } catch (err) {
+          alert('삭제에 실패했습니다.');
+        }
+      }
+    }
+  };
+}
+
+// 사이드 메뉴 전환 기능
+function initMenuSwitch() {
+  const menuManagers = document.getElementById('menu-managers');
+  const menuClients = document.getElementById('menu-clients');
+  const managerSection = document.getElementById('manager-section');
+  const clientSection = document.getElementById('client-section');
+
+  if (!menuManagers || !menuClients || !managerSection || !clientSection) return;
+
+  menuManagers.addEventListener('click', () => {
+    menuManagers.classList.add('active');
+    menuClients.classList.remove('active');
+    managerSection.style.display = '';
+    clientSection.style.display = 'none';
+  });
+  menuClients.addEventListener('click', () => {
+    menuClients.classList.add('active');
+    menuManagers.classList.remove('active');
+    managerSection.style.display = 'none';
+    clientSection.style.display = '';
+  });
+}
+
+// 무한 스크롤로 Firestore에서 고객 데이터 페이지 단위로 불러오기
+async function loadMoreClients() {
+  if (isLoadingClients) return;
+  isLoadingClients = true;
+  let q;
+  if (lastVisible) {
+    q = query(fsCollection(db, "client_info"), orderBy("created_at", "desc"), startAfter(lastVisible), limit(PAGE_SIZE));
+  } else {
+    q = query(fsCollection(db, "client_info"), orderBy("created_at", "desc"), limit(PAGE_SIZE));
+  }
+  const snapshot = await getDocs(q);
+  const newClients = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  if (newClients.length > 0) {
+    pagedClients = pagedClients.concat(newClients);
+    lastVisible = snapshot.docs[snapshot.docs.length - 1];
+    renderCards(pagedClients);
+  }
+  isLoadingClients = false;
+}
+
+// 스크롤 이벤트로 바닥에 닿으면 loadMoreClients 호출
+function setupInfiniteScroll() {
+  const mainContent = document.getElementById('main-content');
+  if (!mainContent) return;
+  mainContent.addEventListener('scroll', () => {
+    if (mainContent.scrollTop + mainContent.clientHeight >= mainContent.scrollHeight - 10) {
+      if (!searchInput.value.trim()) {
+        loadMoreClients();
+      }
+    }
+  });
+}
+
+// listenClients 함수 수정: 인증 상태 확인 추가
+function listenClients() {
+  if (!auth.currentUser) {
+    return;
+  }
+  
+  onSnapshot(fsCollection(db, "client_info"), (snapshot) => {
+    allClients = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    renderCards(allClients);
+  });
+}

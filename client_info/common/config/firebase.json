@@ -6,15 +6,9 @@
       "**/.*",
       "**/node_modules/**"
     ],
-    "redirects": [
-      { "source": "/", "destination": "/client/", "type": 302 },
-      { "source": "/index.html", "destination": "/client/", "type": 302 }
-    ],
     "rewrites": [
-      { "source": "/admin", "destination": "/admin/index.html" },
-      { "source": "/admin/", "destination": "/admin/index.html" },
-      { "source": "/manager", "destination": "/manager/index.html" },
-      { "source": "/manager/", "destination": "/manager/index.html" }
+      { "source": "/admin", "destination": "/admin.html" },
+      { "source": "/manager", "destination": "/manager.html" }
     ]
   },
   "functions": [
