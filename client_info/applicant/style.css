@@ -136,19 +136,25 @@ select:focus {
 /* 주민등록번호 그룹 */
 .ssn-group {
   display: flex;
-  gap: 10px;
+  gap: 15px;
   align-items: center;
+  width: 100%;
 }
 
 .ssn-group input {
-  width: 120px;
   text-align: center;
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: 1px;
+  flex: 1;
+  min-width: 0;
 }
 
 .ssn-group span {
-  font-size: 20px;
+  font-size: 24px;
   color: #666;
   font-weight: bold;
+  flex-shrink: 0;
 }
 
 /* 전화번호 그룹 */
@@ -438,11 +444,15 @@ textarea.error {
   }
   
   .ssn-group {
-    justify-content: center;
+    gap: 10px;
   }
   
   .ssn-group input {
-    width: 100px;
+    font-size: 16px;
+  }
+  
+  .ssn-group span {
+    font-size: 20px;
   }
   
   .phone-group {
