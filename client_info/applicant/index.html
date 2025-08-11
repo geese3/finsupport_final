@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>오너스경영연구소 - 위촉자 정보 입력</title>
+    <link rel="stylesheet" href="style.css" />
+    <!-- Font Awesome 추가 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/crypto-js@4.1.1/crypto-js.min.js"></script>
+    <script type="module" src="../common/config/config.js"></script>
+    <script type="module" src="script.js"></script>
+    <!-- Open Graph & Twitter Card for SNS 썸네일 -->
+    <meta property="og:title" content="오너스경영연구소 - 위촉자 정보 입력" />
+    <meta property="og:description" content="오너스경영연구소 위촉자 정보 입력 페이지입니다." />
+    <meta
+      property="og:image"
+      content="https://client-insurance-42400.web.app/owners_logo.png"
+    />
+    <meta property="og:url" content="https://client-insurance-42400.web.app/applicant/" />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="오너스경영연구소 - 위촉자 정보 입력" />
+    <meta
+      name="twitter:description"
+      content="오너스경영연구소 위촉자 정보 입력 페이지입니다."
+    />
+    <meta
+      name="twitter:image"
+      content="https://client-insurance-42400.web.app/owners_logo.png"
+    />
+  </head>
+  <body>
+    <div class="container">
+      <div class="logo-area" style="text-align:center; margin-bottom:24px;">
+        <img src="../common/assets/owners_logo.png" alt="로고" style="height: 130px;" />
+      </div>
+      
+      <!-- 시험 정보 표시 영역 -->
+      <div id="exam-info" class="exam-info-section">
+        <h3><i class="fas fa-calendar-alt"></i> 지원 시험 정보</h3>
+        <div id="exam-details">
+          <!-- 시험 정보가 동적으로 표시됩니다 -->
+        </div>
+      </div>
+
+      <h3><i class="fas fa-user-plus"></i> 위촉자 정보 입력</h3>
+      <form id="applicantInfoForm">
+        
+        <!-- 기본 정보 섹션 -->
+        <div class="form-section">
+          <h4><i class="fas fa-id-card"></i> 기본 정보</h4>
+          
+          <div class="form-group">
+            <label for="name" class="required">성함</label>
+            <input type="text" id="name" name="name" />
+            <div class="error-message" id="name-error">성함을 입력해주세요.</div>
+          </div>
+
+          <div class="form-group">
+            <label for="ssn" class="required">주민등록번호</label>
+            <div class="ssn-group">
+              <input
+                type="tel"
+                id="ssnFront"
+                name="ssnFront"
+                maxlength="6"
+                pattern="[0-9]*"
+                inputmode="numeric"
+                placeholder="앞 6자리"
+              />
+              <span>-</span>
+              <input
+                type="tel"
+                id="ssnBack"
+                name="ssnBack"
+                maxlength="7"
+                pattern="[0-9]*"
+                inputmode="numeric"
+                placeholder="뒤 7자리"
+              />
+            </div>
+            <div class="error-message" id="ssn-error">
+              주민등록번호를 입력해주세요.
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="email" class="required">이메일 주소</label>
+            <input type="email" id="email" name="email" placeholder="example@example.com" />
+            <div class="error-message" id="email-error">이메일 주소를 입력해주세요.</div>
+          </div>
+        </div>
+
+        <!-- 연락처 정보 섹션 -->
+        <div class="form-section">
+          <h4><i class="fas fa-phone"></i> 연락처 정보</h4>
+          
+          <div class="form-group">
+            <label for="phone" class="required">핸드폰번호</label>
+            <div class="phone-group">
+              <select id="phoneCarrier" name="phoneCarrier">
+                <option value="">통신사</option>
+                <option value="SKT">SKT</option>
+                <option value="KT">KT</option>
+                <option value="LG">LG U+</option>
+                <option value="SKT알뜰">SKT알뜰</option>
+                <option value="KT알뜰">KT알뜰</option>
+                <option value="LG알뜰">LG U+알뜰</option>
+              </select>
+              <input
+                type="tel"
+                id="phone"
+                name="phone"
+                maxlength="13"
+                placeholder="01000000000"
+              />
+            </div>
+            <div class="error-message" id="phoneCarrier-error">
+              통신사를 선택해주세요.
+            </div>
+            <div class="error-message" id="phone-error">
+              핸드폰번호를 입력해주세요.
+            </div>
+          </div>
+        </div>
+
+        <!-- 주소 정보 섹션 -->
+        <div class="form-section">
+          <h4><i class="fas fa-home"></i> 주소 정보</h4>
+          
+          <div class="form-group">
+            <label for="address" class="required">자택 주소</label>
+            <div class="address-group">
+              <input type="text" id="postcode" placeholder="우편번호" readonly />
+              <button type="button" onclick="execDaumPostcode()">
+                주소 검색
+              </button>
+            </div>
+            <input
+              type="text"
+              id="address"
+              name="address"
+              placeholder="기본주소"
+              readonly
+            />
+            <input
+              type="text"
+              id="addressDetail"
+              name="addressDetail"
+              class="address-detail"
+              placeholder="상세주소"
+            />
+            <div class="error-message" id="address-error">
+              주소를 입력해주세요.
+            </div>
+          </div>
+        </div>
+
+        <!-- 계좌 정보 섹션 -->
+        <div class="form-section">
+          <h4><i class="fas fa-university"></i> 계좌 정보</h4>
+          
+          <div class="form-group">
+            <label for="bank" class="required">은행</label>
+            <select id="bank" name="bank">
+              <option value="">은행 선택</option>
+              <option value="KB국민은행">KB국민은행</option>
+              <option value="신한은행">신한은행</option>
+              <option value="우리은행">우리은행</option>
+              <option value="하나은행">하나은행</option>
+              <option value="IBK기업은행">IBK기업은행</option>
+              <option value="농협은행">농협은행</option>
+              <option value="카카오뱅크">카카오뱅크</option>
+              <option value="토스뱅크">토스뱅크</option>
+              <option value="SC제일은행">SC제일은행</option>
+              <option value="씨티은행">씨티은행</option>
+              <option value="DGB대구은행">DGB대구은행</option>
+              <option value="부산은행">부산은행</option>
+              <option value="경남은행">경남은행</option>
+              <option value="광주은행">광주은행</option>
+              <option value="전북은행">전북은행</option>
+              <option value="제주은행">제주은행</option>
+              <option value="케이뱅크">케이뱅크</option>
+              <option value="새마을금고">새마을금고</option>
+              <option value="신협">신협</option>
+              <option value="우체국">우체국</option>
+            </select>
+            <div class="error-message" id="bank-error">은행을 선택해주세요.</div>
+          </div>
+
+          <div class="form-group">
+            <label for="accountNumber" class="required">계좌번호</label>
+            <input type="text" id="accountNumber" name="accountNumber" placeholder="- 없이 숫자만 입력" />
+            <div class="error-message" id="accountNumber-error">계좌번호를 입력해주세요.</div>
+          </div>
+
+          <div class="form-group">
+            <label for="accountHolder" class="required">예금주</label>
+            <input type="text" id="accountHolder" name="accountHolder" />
+            <div class="error-message" id="accountHolder-error">예금주를 입력해주세요.</div>
+          </div>
+        </div>
+
+        <!-- 학력 및 경력 섹션 -->
+        <div class="form-section">
+          <h4><i class="fas fa-graduation-cap"></i> 학력 및 경력 정보</h4>
+          
+          <div class="form-group">
+            <label for="education" class="required">최종 학력</label>
+            <select id="education" name="education">
+              <option value="">학력 선택</option>
+              <option value="고등학교 졸업">고등학교 졸업</option>
+              <option value="전문대학 졸업">전문대학 졸업</option>
+              <option value="4년제 대학교 졸업">4년제 대학교 졸업</option>
+              <option value="대학원 석사">대학원 석사</option>
+              <option value="대학원 박사">대학원 박사</option>
+              <option value="기타">기타</option>
+            </select>
+            <div class="error-message" id="education-error">최종 학력을 선택해주세요.</div>
+          </div>
+
+          <div class="form-group">
+            <label for="major">전공 (선택)</label>
+            <input type="text" id="major" name="major" placeholder="전공 분야" />
+          </div>
+
+          <div class="form-group">
+            <label for="experience" class="required">경력 구분</label>
+            <div class="radio-group">
+              <label class="radio-label">
+                <input type="radio" name="experience" value="신입" id="experience-new" />
+                <span class="radio-custom"></span>
+                신입
+              </label>
+              <label class="radio-label">
+                <input type="radio" name="experience" value="경력" id="experience-experienced" />
+                <span class="radio-custom"></span>
+                경력
+              </label>
+            </div>
+            <div class="error-message" id="experience-error">경력 구분을 선택해주세요.</div>
+          </div>
+
+          <div class="form-group" id="experienceDetail" style="display: none;">
+            <label for="experienceYears">경력 연수</label>
+            <select id="experienceYears" name="experienceYears">
+              <option value="">선택해주세요</option>
+              <option value="1년 미만">1년 미만</option>
+              <option value="1-2년">1-2년</option>
+              <option value="3-5년">3-5년</option>
+              <option value="6-10년">6-10년</option>
+              <option value="10년 이상">10년 이상</option>
+            </select>
+          </div>
+
+          <div class="form-group" id="previousCompany" style="display: none;">
+            <label for="prevCompany">이전 회사명</label>
+            <input type="text" id="prevCompany" name="prevCompany" placeholder="이전 직장명" />
+          </div>
+        </div>
+
+        <!-- 개인정보 동의 -->
+        <div class="consent-section">
+          <div class="consent-row">
+            <div class="consent-left">
+              <span
+                class="check-icon"
+                id="agree1-icon"
+                tabindex="0"
+                onclick="toggleConsent('agree1')"
+              >
+                <svg width="20" height="20" viewBox="0 0 20 20">
+                  <polyline
+                    points="4,11 9,16 16,5"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                  />
+                </svg>
+              </span>
+              <input
+                type="checkbox"
+                id="agree1"
+                name="agree1"
+                style="display: none"
+              />
+              <span class="required-text">[필수]</span>
+              <span class="consent-title">개인정보 수집 및 이용 동의</span>
+            </div>
+            <div class="consent-right">
+              <button
+                type="button"
+                class="consent-view"
+                onclick="openModal('modal1')"
+              >
+                전체 &gt;
+              </button>
+            </div>
+          </div>
+          <div class="error-message" id="agree1-error">
+            개인정보 수집 및 이용에 동의해주세요.
+          </div>
+        </div>
+
+        <!-- 모달 1: 수집 이용 동의 -->
+        <div id="modal1" class="modal">
+          <div class="modal-content">
+            <span class="close" onclick="closeModal('modal1')">&times;</span>
+            <h3>개인정보 수집 및 이용 동의</h3>
+            <p>
+              1. 수집하는 개인정보 항목 <br />
+              • 성명, 주민등록번호, 연락처(휴대폰), 주소 <br />
+              • 이메일 주소 <br />
+              • 계좌정보(은행, 계좌번호, 예금주) <br />
+              • 학력 및 경력 정보 <br />
+              <br />
+              2. 수집·이용 목적 <br />
+              • 위촉자 자격시험 신청 및 관리 <br />
+              • 자격 취득 후 위촉 계약 체결 <br />
+              • 본인 확인 및 위촉자 관리 <br />
+              • 수수료 지급을 위한 계좌 정보 관리 <br />
+              <br />
+              3. 보유 및 이용 기간 <br />
+              • 수집일로부터 3년간 <br />
+              • 단, 관계 법령에 의해 보존이 필요한 경우 해당 기간 동안 보관
+              <br />
+              <br />
+              4. 동의 거부 권리 및 불이익 안내 <br />
+              • 귀하는 개인정보 수집·이용에 대한 동의를 거부하실 수 있습니다.
+              <br />
+              • 다만, 동의하지 않으실 경우 위촉자 자격시험 신청이 제한될 수
+              있습니다.
+            </p>
+          </div>
+        </div>
+
+        <!-- 제출 버튼 -->
+        <div class="form-group">
+          <button type="submit" class="submit-btn">
+            <i class="fas fa-paper-plane"></i> 제출하기
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- 숨겨진 입력 필드들 (URL 파라미터에서 가져온 값들) -->
+    <input type="hidden" id="examId" name="examId" />
+    <input type="hidden" id="managerCode" name="managerCode" />
+
+    <script src="//t1.daumcdn.net/mapjsapi/bundle/postcode/prod/postcode.v2.js"></script>
+  </body>
+</html>

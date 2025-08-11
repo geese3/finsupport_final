@@ -14,7 +14,9 @@
       { "source": "/admin", "destination": "/admin/index.html" },
       { "source": "/admin/", "destination": "/admin/index.html" },
       { "source": "/manager", "destination": "/manager/index.html" },
-      { "source": "/manager/", "destination": "/manager/index.html" }
+      { "source": "/manager/", "destination": "/manager/index.html" },
+      { "source": "/applicant", "destination": "/applicant/index.html" },
+      { "source": "/applicant/", "destination": "/applicant/index.html" }
     ]
   },
   "functions": [
