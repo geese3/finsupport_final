@@ -4613,10 +4613,194 @@ class AdminApplicantViewer {
     }
   }
 
-  downloadExcel() {
-    // Excel 다운로드 기능 구현
-    console.log('Excel 다운로드 기능 - 개발 예정');
-    showAlert('Excel 다운로드 기능은 개발 예정입니다.');
+  async downloadExcel() {
+    try {
+      // 로딩 상태 표시
+      const downloadBtn = document.getElementById('admin-excel-download');
+      if (downloadBtn) {
+        downloadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 다운로드 중...';
+        downloadBtn.disabled = true;
+      }
+
+      // 현재 필터링된 위촉자 목록을 사용
+      const applicantsToDownload = this.filteredApplicants;
+
+      if (applicantsToDownload.length === 0) {
+        showAlert('다운로드할 위촉자 정보가 없습니다.');
+        return;
+      }
+
+      // 담당자 정보 로드 (한번에 모든 담당자 정보를 가져옴)
+      const managersRef = collection(db, 'managers');
+      const managersSnapshot = await getDocs(managersRef);
+      const managers = {};
+      
+      managersSnapshot.forEach((doc) => {
+        const manager = doc.data();
+        managers[manager.code] = manager;
+      });
+
+      // 엑셀 데이터 준비
+      const excelData = [];
+      
+      for (const applicant of applicantsToDownload) {
+        try {
+          // 주민등록번호 복호화
+          let decryptedSSN = '';
+          try {
+            decryptedSSN = await decryptSSN(applicant.ssn);
+          } catch (error) {
+            console.warn('SSN 복호화 실패:', error);
+            decryptedSSN = '복호화 실패';
+          }
+
+          // 등록일 포맷팅
+          const createdAt = applicant.created_at?.toDate ? applicant.created_at.toDate() : new Date(applicant.created_at);
+          const dateStr = createdAt.toLocaleDateString('ko-KR', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+          });
+
+          // 시험 정보 파싱
+          let examInfo = { examDate: '', region: '', applicationPeriod: '' };
+          if (applicant.examId) {
+            const examData = this.parseExamIdToData(applicant.examId);
+            if (examData) {
+              examInfo = {
+                examDate: examData.examDate || '',
+                region: examData.region || '',
+                applicationPeriod: examData.applicationPeriod || ''
+              };
+            }
+          }
+
+          // 담당자 정보
+          let managerInfo = { name: '', team: '', code: '' };
+          if (applicant.managerCode && managers[applicant.managerCode]) {
+            const manager = managers[applicant.managerCode];
+            managerInfo = {
+              name: manager.name || '',
+              team: manager.team || '',
+              code: applicant.managerCode
+            };
+          }
+
+          // 신청 타입 한글화
+          let applicationTypeKr = '';
+          switch (applicant.applicationType) {
+            case 'manager_referral':
+              applicationTypeKr = '담당자 추천';
+              break;
+            case 'admin_referral':
+              applicationTypeKr = '관리자 링크';
+              break;
+            case 'direct_application':
+            default:
+              applicationTypeKr = '직접 신청';
+              break;
+          }
+
+          // 성별 변환
+          const genderMap = { 'M': '남성', 'F': '여성' };
+          const gender = genderMap[applicant.gender] || applicant.gender || '';
+
+          // 엑셀 행 데이터
+          const rowData = {
+            '등록일': dateStr,
+            '성명': applicant.name || '',
+            '주민등록번호': decryptedSSN,
+            '성별': gender,
+            '이메일': applicant.email || '',
+            '통신사': applicant.phoneCarrier || '',
+            '휴대폰번호': applicant.phone || '',
+            '우편번호': applicant.postcode || '',
+            '주소': applicant.address || '',
+            '상세주소': applicant.addressDetail || '',
+            '은행': applicant.bank || '',
+            '계좌번호': applicant.accountNumber || '',
+            '예금주': applicant.accountHolder || '',
+            '최종학력': applicant.education || '',
+            '학교명': applicant.schoolName || '',
+            '전공': applicant.major || '',
+            '보험업계경력': applicant.experience || '',
+            '시험일': examInfo.examDate,
+            '시험지역': examInfo.region,
+            '접수마감일': examInfo.applicationPeriod,
+            '담당자명': managerInfo.name,
+            '담당자팀': managerInfo.team,
+            '담당자코드': managerInfo.code,
+            '신청타입': applicationTypeKr
+          };
+
+          excelData.push(rowData);
+
+        } catch (error) {
+          console.error('위촉자 정보 처리 중 오류:', applicant.id, error);
+          // 오류가 있는 위촉자는 건너뛰고 계속 진행
+        }
+      }
+
+      if (excelData.length === 0) {
+        showAlert('처리할 수 있는 위촉자 정보가 없습니다.');
+        return;
+      }
+
+      // 엑셀 워크북 생성
+      const workbook = XLSX.utils.book_new();
+      const worksheet = XLSX.utils.json_to_sheet(excelData);
+
+      // 컬럼 너비 조정
+      const colWidths = [
+        { wch: 12 }, // 등록일
+        { wch: 10 }, // 성명
+        { wch: 15 }, // 주민등록번호
+        { wch: 6 },  // 성별
+        { wch: 25 }, // 이메일
+        { wch: 8 },  // 통신사
+        { wch: 13 }, // 휴대폰번호
+        { wch: 8 },  // 우편번호
+        { wch: 30 }, // 주소
+        { wch: 20 }, // 상세주소
+        { wch: 10 }, // 은행
+        { wch: 15 }, // 계좌번호
+        { wch: 10 }, // 예금주
+        { wch: 10 }, // 최종학력
+        { wch: 15 }, // 학교명
+        { wch: 12 }, // 전공
+        { wch: 12 }, // 보험업계경력
+        { wch: 12 }, // 시험일
+        { wch: 8 },  // 시험지역
+        { wch: 15 }, // 접수마감일
+        { wch: 10 }, // 담당자명
+        { wch: 8 },  // 담당자팀
+        { wch: 10 }, // 담당자코드
+        { wch: 12 }  // 신청타입
+      ];
+      worksheet['!cols'] = colWidths;
+
+      XLSX.utils.book_append_sheet(workbook, worksheet, '위촉자정보');
+
+      // 파일명 생성
+      const now = new Date();
+      const filename = `위촉자정보_${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}.xlsx`;
+
+      // 파일 다운로드
+      XLSX.writeFile(workbook, filename);
+
+      showAlert(`${excelData.length}명의 위촉자 정보가 엑셀 파일로 다운로드되었습니다.`);
+
+    } catch (error) {
+      console.error('엑셀 다운로드 실패:', error);
+      showAlert('엑셀 다운로드 중 오류가 발생했습니다: ' + error.message);
+    } finally {
+      // 버튼 상태 복원
+      const downloadBtn = document.getElementById('admin-excel-download');
+      if (downloadBtn) {
+        downloadBtn.innerHTML = '<i class="fas fa-file-excel"></i> 엑셀 다운로드';
+        downloadBtn.disabled = false;
+      }
+    }
   }
 
   destroy() {
