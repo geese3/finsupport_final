@@ -4245,25 +4245,25 @@ class AdminApplicantViewer {
             </div>
             <div class="info-item">
               <span class="label">담당자:</span>
-              <span class="value">${managerDisplay}</span>
+              ${!applicant.managerCode ? `
+                <button class="assign-manager-btn" onclick="event.stopPropagation(); window.adminApplicantViewer.showManagerAssignModal('${applicant.id}')" style="
+                  background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+                  color: white;
+                  border: none;
+                  padding: 6px 10px;
+                  border-radius: 4px;
+                  font-size: 11px;
+                  font-weight: 600;
+                  cursor: pointer;
+                  transition: transform 0.2s ease;
+                  margin-left: auto;
+                " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                  <i class="fas fa-user-plus"></i> 지정
+                </button>
+              ` : `
+                <span class="value">${managerDisplay}</span>
+              `}
             </div>
-            ${!applicant.managerCode ? `
-            <div class="info-item" style="margin-top: 12px;">
-              <button class="assign-manager-btn" onclick="event.stopPropagation(); window.adminApplicantViewer.showManagerAssignModal('${applicant.id}')" style="
-                background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
-                color: white;
-                border: none;
-                padding: 8px 12px;
-                border-radius: 6px;
-                font-size: 12px;
-                font-weight: 600;
-                cursor: pointer;
-                transition: transform 0.2s ease;
-                width: 100%;
-              " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
-                <i class="fas fa-user-plus"></i> 담당자 지정
-              </button>
-            </div>` : ''}
           </div>
         </div>
       `;
@@ -4488,7 +4488,23 @@ class AdminApplicantViewer {
 
         <!-- 도입자 정보 -->
         <div class="detail-section">
-          <h5><i class="fas fa-user-tie"></i> 도입자 정보</h5>
+          <h5>
+            <i class="fas fa-user-tie"></i> 도입자 정보
+            <button onclick="window.adminApplicantViewer.showManagerEditModal('${applicant.id}')" style="
+              background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+              color: white;
+              border: none;
+              padding: 4px 8px;
+              border-radius: 4px;
+              font-size: 11px;
+              font-weight: 600;
+              cursor: pointer;
+              margin-left: 8px;
+              transition: transform 0.2s ease;
+            " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+              <i class="fas fa-edit"></i> 수정
+            </button>
+          </h5>
           <div class="detail-grid">
             <div class="detail-item">
               <label>도입자명</label>
@@ -4820,6 +4836,110 @@ class AdminApplicantViewer {
     }
   }
 
+  // 담당자 수정 모달 표시
+  async showManagerEditModal(applicantId) {
+    try {
+      const applicant = this.applicants.find(a => a.id === applicantId);
+      if (!applicant) {
+        showAlert('위촉자 정보를 찾을 수 없습니다.');
+        return;
+      }
+
+      // 모든 담당자 목록 로드
+      const managersRef = collection(db, 'managers');
+      const managersSnapshot = await getDocs(managersRef);
+      const managers = [];
+      
+      managersSnapshot.forEach((doc) => {
+        const manager = doc.data();
+        managers.push({
+          id: doc.id,
+          ...manager
+        });
+      });
+
+      // 팀별로 그룹화
+      const teamGroups = {};
+      managers.forEach(manager => {
+        const team = manager.team || '미분류';
+        if (!teamGroups[team]) {
+          teamGroups[team] = [];
+        }
+        teamGroups[team].push(manager);
+      });
+
+      // 현재 담당자 정보 로드
+      const currentManagerInfo = await this.getManagerInfo(applicant.managerCode);
+
+      // 모달 HTML 생성
+      const modalHtml = `
+        <div class="admin-applicant-modal" id="manager-edit-modal" style="display: block;">
+          <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+              <h3>담당자 수정 - ${applicant.name}</h3>
+              <span class="close" onclick="window.adminApplicantViewer.closeManagerEditModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+              <div style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #3498db;">
+                <p style="margin: 0; color: #2c3e50; font-weight: 600;">위촉자: ${applicant.name}</p>
+                <p style="margin: 5px 0 0 0; color: #666; font-size: 14px;">전화번호: ${applicant.phone || '-'}</p>
+                ${currentManagerInfo ? `<p style="margin: 5px 0 0 0; color: #666; font-size: 14px;">현재 담당자: ${currentManagerInfo.name} (${currentManagerInfo.gaiaId || applicant.managerCode})</p>` : ''}
+              </div>
+              
+              <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50;">새 담당자 선택:</label>
+                <select id="manager-edit-select" style="width: 100%; padding: 12px; border: 2px solid #e1e8ed; border-radius: 8px; font-size: 16px; background: white;">
+                  <option value="">담당자를 선택하세요</option>
+                  ${Object.entries(teamGroups).map(([team, teamManagers]) => `
+                    <optgroup label="${team}">
+                      ${teamManagers.map(manager => `
+                        <option value="${manager.code}" ${manager.code === applicant.managerCode ? 'selected' : ''}>${manager.name} (${manager.gaiaId || manager.code})</option>
+                      `).join('')}
+                    </optgroup>
+                  `).join('')}
+                </select>
+              </div>
+              
+              <div style="margin-bottom: 15px; padding: 12px; background: #fff3cd; border-radius: 6px; border-left: 4px solid #ffc107;">
+                <p style="margin: 0; color: #856404; font-size: 13px;">
+                  <i class="fas fa-info-circle"></i> 담당자를 변경하면 해당 위촉자의 담당자 정보가 즉시 업데이트됩니다.
+                </p>
+              </div>
+            </div>
+            <div class="modal-footer" style="display: flex; gap: 10px; justify-content: flex-end;">
+              <button class="admin-secondary-btn" onclick="window.adminApplicantViewer.closeManagerEditModal()">취소</button>
+              <button class="edit-confirm-btn" onclick="window.adminApplicantViewer.updateManager('${applicantId}')" style="
+                background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 6px;
+                cursor: pointer;
+                font-weight: 600;
+                transition: all 0.3s ease;
+              ">
+                <i class="fas fa-save"></i> 수정하기
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      // 기존 모달 제거
+      const existingModal = document.getElementById('manager-edit-modal');
+      if (existingModal) {
+        existingModal.remove();
+      }
+
+      // 모달 추가
+      document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    } catch (error) {
+      console.error('담당자 수정 모달 로드 실패:', error);
+      showAlert('담당자 목록을 불러오는 중 오류가 발생했습니다.');
+    }
+  }
+
   // 담당자 배정 모달 표시
   async showManagerAssignModal(applicantId) {
     try {
@@ -4977,6 +5097,90 @@ class AdminApplicantViewer {
       const confirmBtn = document.querySelector('.assign-confirm-btn');
       if (confirmBtn) {
         confirmBtn.innerHTML = '<i class="fas fa-check"></i> 지정하기';
+        confirmBtn.disabled = false;
+      }
+    }
+  }
+
+  // 담당자 수정 모달 닫기
+  closeManagerEditModal() {
+    const modal = document.getElementById('manager-edit-modal');
+    if (modal) {
+      modal.remove();
+    }
+  }
+
+  // 담당자 수정 실행
+  async updateManager(applicantId) {
+    try {
+      const managerSelect = document.getElementById('manager-edit-select');
+      const selectedManagerCode = managerSelect.value;
+
+      if (!selectedManagerCode) {
+        showAlert('새 담당자를 선택해주세요.');
+        return;
+      }
+
+      // 현재 담당자와 동일한지 확인
+      const applicant = this.applicants.find(a => a.id === applicantId);
+      if (applicant && applicant.managerCode === selectedManagerCode) {
+        showAlert('현재 담당자와 동일합니다.');
+        return;
+      }
+
+      // 로딩 상태 표시
+      const confirmBtn = document.querySelector('.edit-confirm-btn');
+      const originalText = confirmBtn.innerHTML;
+      confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 수정 중...';
+      confirmBtn.disabled = true;
+
+      // Firestore에 담당자 정보 업데이트
+      const applicantRef = doc(db, 'applicants', applicantId);
+      await updateDoc(applicantRef, {
+        managerCode: selectedManagerCode,
+        updated_at: new Date()
+      });
+
+      // 로컬 데이터 업데이트
+      const applicantIndex = this.applicants.findIndex(a => a.id === applicantId);
+      if (applicantIndex !== -1) {
+        this.applicants[applicantIndex].managerCode = selectedManagerCode;
+        this.applicants[applicantIndex].updated_at = new Date();
+      }
+
+      // 필터링된 데이터도 업데이트
+      const filteredIndex = this.filteredApplicants.findIndex(a => a.id === applicantId);
+      if (filteredIndex !== -1) {
+        this.filteredApplicants[filteredIndex].managerCode = selectedManagerCode;
+        this.filteredApplicants[filteredIndex].updated_at = new Date();
+      }
+
+      // 화면 재렌더링
+      await this.renderCards();
+      this.renderStats();
+
+      // 상세 모달이 열려있으면 새로고침
+      const detailModal = document.getElementById('admin-applicant-modal');
+      if (detailModal && detailModal.style.display !== 'none') {
+        // 잠시 후 상세 모달 새로고침
+        setTimeout(() => {
+          this.viewDetail(applicantId);
+        }, 100);
+      }
+
+      // 모달 닫기
+      this.closeManagerEditModal();
+
+      showToast('담당자가 성공적으로 수정되었습니다!', 'success');
+
+    } catch (error) {
+      console.error('담당자 수정 실패:', error);
+      showAlert('담당자 수정 중 오류가 발생했습니다: ' + error.message);
+      
+      // 버튼 상태 복원
+      const confirmBtn = document.querySelector('.edit-confirm-btn');
+      if (confirmBtn) {
+        confirmBtn.innerHTML = '<i class="fas fa-save"></i> 수정하기';
         confirmBtn.disabled = false;
       }
     }
