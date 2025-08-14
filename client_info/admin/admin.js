@@ -4247,6 +4247,23 @@ class AdminApplicantViewer {
               <span class="label">담당자:</span>
               <span class="value">${managerDisplay}</span>
             </div>
+            ${!applicant.managerCode ? `
+            <div class="info-item" style="margin-top: 12px;">
+              <button class="assign-manager-btn" onclick="event.stopPropagation(); window.adminApplicantViewer.showManagerAssignModal('${applicant.id}')" style="
+                background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+                color: white;
+                border: none;
+                padding: 8px 12px;
+                border-radius: 6px;
+                font-size: 12px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: transform 0.2s ease;
+                width: 100%;
+              " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                <i class="fas fa-user-plus"></i> 담당자 지정
+              </button>
+            </div>` : ''}
           </div>
         </div>
       `;
@@ -4702,15 +4719,15 @@ class AdminApplicantViewer {
           }
 
           // 성별 변환
-          const genderMap = { 'M': '남성', 'F': '여성' };
-          const gender = genderMap[applicant.gender] || applicant.gender || '';
+          // const genderMap = { 'M': '남성', 'F': '여성' };
+          // const gender = genderMap[applicant.gender] || applicant.gender || '';
 
           // 엑셀 행 데이터
           const rowData = {
             '등록일': dateStr,
             '성명': applicant.name || '',
             '주민등록번호': decryptedSSN,
-            '성별': gender,
+            // '성별': gender,
             '이메일': applicant.email || '',
             '통신사': applicant.phoneCarrier || '',
             '휴대폰번호': applicant.phone || '',
@@ -4755,7 +4772,7 @@ class AdminApplicantViewer {
         { wch: 12 }, // 등록일
         { wch: 10 }, // 성명
         { wch: 15 }, // 주민등록번호
-        { wch: 6 },  // 성별
+        // { wch: 6 },  // 성별
         { wch: 25 }, // 이메일
         { wch: 8 },  // 통신사
         { wch: 13 }, // 휴대폰번호
@@ -4799,6 +4816,168 @@ class AdminApplicantViewer {
       if (downloadBtn) {
         downloadBtn.innerHTML = '<i class="fas fa-file-excel"></i> 엑셀 다운로드';
         downloadBtn.disabled = false;
+      }
+    }
+  }
+
+  // 담당자 배정 모달 표시
+  async showManagerAssignModal(applicantId) {
+    try {
+      const applicant = this.applicants.find(a => a.id === applicantId);
+      if (!applicant) {
+        showAlert('위촉자 정보를 찾을 수 없습니다.');
+        return;
+      }
+
+      // 모든 담당자 목록 로드
+      const managersRef = collection(db, 'managers');
+      const managersSnapshot = await getDocs(managersRef);
+      const managers = [];
+      
+      managersSnapshot.forEach((doc) => {
+        const manager = doc.data();
+        managers.push({
+          id: doc.id,
+          ...manager
+        });
+      });
+
+      // 팀별로 그룹화
+      const teamGroups = {};
+      managers.forEach(manager => {
+        const team = manager.team || '미분류';
+        if (!teamGroups[team]) {
+          teamGroups[team] = [];
+        }
+        teamGroups[team].push(manager);
+      });
+
+      // 모달 HTML 생성
+      const modalHtml = `
+        <div class="admin-applicant-modal" id="manager-assign-modal" style="display: block;">
+          <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+              <h3>담당자 지정 - ${applicant.name}</h3>
+              <span class="close" onclick="window.adminApplicantViewer.closeManagerAssignModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+              <div style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #3498db;">
+                <p style="margin: 0; color: #2c3e50; font-weight: 600;">위촉자: ${applicant.name}</p>
+                <p style="margin: 5px 0 0 0; color: #666; font-size: 14px;">전화번호: ${applicant.phone || '-'}</p>
+              </div>
+              
+              <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #2c3e50;">팀별 담당자 선택:</label>
+                <select id="manager-select" style="width: 100%; padding: 12px; border: 2px solid #e1e8ed; border-radius: 8px; font-size: 16px; background: white;">
+                  <option value="">담당자를 선택하세요</option>
+                  ${Object.entries(teamGroups).map(([team, teamManagers]) => `
+                    <optgroup label="${team}">
+                      ${teamManagers.map(manager => `
+                        <option value="${manager.code}">${manager.name} (${manager.gaiaId || manager.code})</option>
+                      `).join('')}
+                    </optgroup>
+                  `).join('')}
+                </select>
+              </div>
+            </div>
+            <div class="modal-footer" style="display: flex; gap: 10px; justify-content: flex-end;">
+              <button class="admin-secondary-btn" onclick="window.adminApplicantViewer.closeManagerAssignModal()">취소</button>
+              <button class="assign-confirm-btn" onclick="window.adminApplicantViewer.assignManager('${applicantId}')" style="
+                background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 6px;
+                cursor: pointer;
+                font-weight: 600;
+                transition: all 0.3s ease;
+              ">
+                <i class="fas fa-check"></i> 지정하기
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+
+      // 기존 모달 제거
+      const existingModal = document.getElementById('manager-assign-modal');
+      if (existingModal) {
+        existingModal.remove();
+      }
+
+      // 모달 추가
+      document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    } catch (error) {
+      console.error('담당자 배정 모달 로드 실패:', error);
+      showAlert('담당자 목록을 불러오는 중 오류가 발생했습니다.');
+    }
+  }
+
+  // 담당자 배정 모달 닫기
+  closeManagerAssignModal() {
+    const modal = document.getElementById('manager-assign-modal');
+    if (modal) {
+      modal.remove();
+    }
+  }
+
+  // 담당자 배정 실행
+  async assignManager(applicantId) {
+    try {
+      const managerSelect = document.getElementById('manager-select');
+      const selectedManagerCode = managerSelect.value;
+
+      if (!selectedManagerCode) {
+        showAlert('담당자를 선택해주세요.');
+        return;
+      }
+
+      // 로딩 상태 표시
+      const confirmBtn = document.querySelector('.assign-confirm-btn');
+      const originalText = confirmBtn.innerHTML;
+      confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 지정 중...';
+      confirmBtn.disabled = true;
+
+      // Firestore에 담당자 정보 업데이트
+      const applicantRef = doc(db, 'applicants', applicantId);
+      await updateDoc(applicantRef, {
+        managerCode: selectedManagerCode,
+        updated_at: new Date()
+      });
+
+      // 로컬 데이터 업데이트
+      const applicantIndex = this.applicants.findIndex(a => a.id === applicantId);
+      if (applicantIndex !== -1) {
+        this.applicants[applicantIndex].managerCode = selectedManagerCode;
+        this.applicants[applicantIndex].updated_at = new Date();
+      }
+
+      // 필터링된 데이터도 업데이트
+      const filteredIndex = this.filteredApplicants.findIndex(a => a.id === applicantId);
+      if (filteredIndex !== -1) {
+        this.filteredApplicants[filteredIndex].managerCode = selectedManagerCode;
+        this.filteredApplicants[filteredIndex].updated_at = new Date();
+      }
+
+      // 화면 재렌더링
+      await this.renderCards();
+      this.renderStats();
+
+      // 모달 닫기
+      this.closeManagerAssignModal();
+
+      showToast('담당자가 성공적으로 지정되었습니다!', 'success');
+
+    } catch (error) {
+      console.error('담당자 배정 실패:', error);
+      showAlert('담당자 지정 중 오류가 발생했습니다: ' + error.message);
+      
+      // 버튼 상태 복원
+      const confirmBtn = document.querySelector('.assign-confirm-btn');
+      if (confirmBtn) {
+        confirmBtn.innerHTML = '<i class="fas fa-check"></i> 지정하기';
+        confirmBtn.disabled = false;
       }
     }
   }
