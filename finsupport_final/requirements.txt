@@ -1,0 +1,7 @@
+supabase==2.16.0
+requests==2.32.4
+aiohttp==3.10.10
+pandas
+openpyxl==3.1.2
+beautifulsoup4==4.12.2
+customtkinter>=5.2.0

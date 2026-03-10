@@ -1,0 +1,30 @@
+name: 자동 공고 크롤링
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # 매일 09:00 KST (UTC 00:00)
+  workflow_dispatch:      # 수동 실행 가능
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Python 설정
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: 의존성 설치
+        run: pip install -r requirements_crawler.txt
+
+      - name: 크롤링 실행
+        run: python crawler.py
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
