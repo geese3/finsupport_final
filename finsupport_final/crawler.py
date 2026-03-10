@@ -36,6 +36,9 @@ logger = logging.getLogger(__name__)
 
 
 def get_supabase_client():
+    logger.info(f"Supabase URL: {SUPABASE_URL[:30]}... (환경변수: {'있음' if os.environ.get('SUPABASE_URL') else '없음'})")
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        raise ValueError("SUPABASE_URL 또는 SUPABASE_KEY가 설정되지 않았습니다.")
     return create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
